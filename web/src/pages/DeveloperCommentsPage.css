@@ -26,6 +26,16 @@
 .dev-notice { background: #eff6ff; color: #1d4ed8; padding: 10px 12px; border-radius: 8px; }
 .dev-section-heading { display: flex; justify-content: space-between; gap: 16px; align-items: center; margin: 32px 0 20px; }
 .dev-project-picker, .dev-round-picker { max-width: 640px; margin: 20px 0; }
+.dev-environment-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin: 24px 0; align-items: start; }
+.dev-environment { padding: 20px; }
+.dev-environment h2 { font-size: 20px; }
+.developer-page .dev-environment form { margin: 16px 0 0; }
+.dev-origin-list { list-style: none; padding: 0; margin: 16px 0; display: grid; gap: 8px; }
+.dev-origin-list li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 9px 10px; background: #f8fafc; border-radius: 8px; }
+.dev-origin-list code { overflow-wrap: anywhere; font-size: 13px; }
+.dev-origin-list button { flex-shrink: 0; padding: 6px 9px; font-size: 12px; }
+.dev-origin-choices { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 8px; }
+.dev-origin-choices button { max-width: 100%; padding: 6px 9px; font-size: 12px; overflow-wrap: anywhere; }
 .dev-filters { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; max-width: 640px; margin-bottom: 20px; }
 .dev-comments { list-style: none; padding: 0; display: grid; gap: 16px; }
 .dev-comment-heading { display: flex; justify-content: space-between; align-items: start; gap: 16px; }
@@ -70,4 +80,5 @@
   .dev-login { margin-top: 24px; padding: 24px; }
   .dev-section-heading, .dev-comment-heading { align-items: flex-start; flex-direction: column; }
   .dev-filters { grid-template-columns: 1fr; }
+  .dev-environment-grid { grid-template-columns: 1fr; }
 }

@@ -9,8 +9,18 @@ const projectId = '11111111-1111-4111-8111-111111111111';
 const emptyProjectId = '11111111-1111-4111-8111-111111111112';
 const roundId = '22222222-2222-4222-8222-222222222222';
 const emptyRoundId = '22222222-2222-4222-8222-222222222223';
-const round = { id: roundId, name: 'Első ügyfélkör', version: 1, status: 'REVIEWING' };
+const round = { id: roundId, name: 'Első ügyfélkör', version: 1, status: 'REVIEWING', targetUrl: 'https://kovacs-klima.vercel.app/' };
 const fixtureToken = 'fixture-access-token-not-a-real-jwt';
+const fixtureOrg = { id: '44444444-4444-4444-8444-444444444444', name: 'Teszt ügynökség' };
+const addedProjects = [];
+const addedRounds = [];
+const fixtureProjects = [
+  { id: projectId, name: 'Kovács Klíma', organization: fixtureOrg, role: 'OWNER',
+    publicKey: 'fixture-kovacs-key', allowedDomains: ['https://kovacs-klima.vercel.app'] },
+  { id: emptyProjectId, name: 'Új projekt', organization: fixtureOrg, role: 'OWNER',
+    publicKey: 'fixture-empty-key', allowedDomains: ['http://localhost:5173'] },
+];
+const fixtureLinks = new Map();
 let comments = [
   { id: '33333333-3333-4333-8333-333333333331', elementText: 'Főcím', comment: 'Legyen nagyobb a főcím.', pathname: '/test', status: 'OPEN' },
   { id: '33333333-3333-4333-8333-333333333332', elementText: 'Ajánlatkérés', comment: '<img src=x onerror=alert(1)> Ez csak szöveg.', pathname: '/contact', status: 'OPEN' },
@@ -45,16 +55,68 @@ api.defaults.adapter = async (config) => {
   if (config.method === 'get' && document.getElementById('fail-load').checked) {
     return respond(500, { message: 'Simulated load error' });
   }
+  if (config.url === '/organizations') return respond(200, { organizations: [fixtureOrg] });
+  if (config.url === '/projects/onboard') {
+    if (document.getElementById('fail-save').checked) return respond(500, { message: 'Simulated save error' });
+    const url = new URL(payload.targetUrl);
+    const project = { id: crypto.randomUUID(), name: payload.name, organization: fixtureOrg,
+      publicKey: 'fixture-public-project-key', allowedDomains: [url.origin], role: 'OWNER' };
+    const reviewRound = { id: crypto.randomUUID(), projectId: project.id, targetUrl: url.href,
+      name: 'Első ügyfél review', version: 1, status: 'DRAFT' };
+    addedProjects.unshift(project);
+    addedRounds.push(reviewRound);
+    return respond(201, { project, reviewRound });
+  }
+  if (config.url.endsWith('/connection')) return respond(200, { lastConnectedAt: null, origin: null });
+  if (/^\/rounds\/[^/]+\/links$/.test(config.url)) {
+    const id = config.url.split('/')[2];
+    const saved = fixtureLinks.get(id) || [];
+    if (config.method === 'get') return respond(200, { reviewLinks: saved });
+    if (document.getElementById('fail-save').checked) return respond(500, { message: 'Simulated save error' });
+    const link = { id: crypto.randomUUID(), isActive: true, createdAt: new Date().toISOString(), expiresAt: payload.expiresAt };
+    fixtureLinks.set(id, [link, ...saved]);
+    return respond(201, { reviewLink: { ...link, reviewUrl: window.location.origin + '/r/fixture-not-a-real-review-token' } });
+  }
+  if (config.method === 'delete' && config.url.startsWith('/links/')) {
+    if (document.getElementById('fail-save').checked) return respond(500, { message: 'Simulated save error' });
+    for (const saved of fixtureLinks.values()) {
+      const link = saved.find((item) => item.id === config.url.split('/').at(-1));
+      if (link) { link.isActive = false; return respond(200, { reviewLink: { ...link } }); }
+    }
+  }
+  const originRoute = config.url.match(/^\/projects\/([^/]+)\/origins$/);
+  if (config.method === 'patch' && originRoute) {
+    if (document.getElementById('fail-save').checked) return respond(500, { message: 'Simulated save error' });
+    const project = [...addedProjects, ...fixtureProjects].find((item) => item.id === originRoute[1]);
+    if (!project) return respond(404, { message: 'Not found' });
+    project.allowedDomains = [...new Set(payload.origins.map((item) => new URL(item).origin))];
+    return respond(200, { project: structuredClone(project) });
+  }
+  const projectRoundsRoute = config.url.match(/^\/projects\/([^/]+)\/rounds$/);
+  if (projectRoundsRoute) {
+    const requestedProjectId = projectRoundsRoute[1];
+    const saved = addedRounds.filter((item) => item.projectId === requestedProjectId);
+    const builtIn = requestedProjectId === projectId
+      ? [round, { ...round, id: emptyRoundId, version: 2, name: 'Üres review kör' }]
+      : [];
+    if (config.method === 'get') return respond(200, { reviewRounds: [...saved, ...builtIn] });
+    if (config.method === 'post') {
+      if (document.getElementById('fail-save').checked) return respond(500, { message: 'Simulated save error' });
+      const reviewRound = { id: crypto.randomUUID(), projectId: requestedProjectId, targetUrl: new URL(payload.targetUrl).href,
+        name: payload.name, version: saved.length + builtIn.length + 1, status: 'DRAFT' };
+      addedRounds.unshift(reviewRound);
+      return respond(201, { reviewRound });
+    }
+  }
+  for (const added of addedRounds) {
+    if (config.url === '/rounds/' + added.id + '/comments') return respond(200, { reviewRound: added, comments: [] });
+  }
   if (config.url === '/projects') {
     return respond(200, { projects: [
-      { id: projectId, name: 'Kovács Klíma', organization: { name: 'Teszt ügynökség' } },
-      { id: emptyProjectId, name: 'Új projekt', organization: { name: 'Teszt ügynökség' } },
+      ...addedProjects,
+      ...fixtureProjects,
     ] });
   }
-  if (config.url === `/projects/${projectId}/rounds`) {
-    return respond(200, { reviewRounds: [round, { ...round, id: emptyRoundId, version: 2, name: 'Üres review kör' }] });
-  }
-  if (config.url === `/projects/${emptyProjectId}/rounds`) return respond(200, { reviewRounds: [] });
   if (config.url === `/rounds/${roundId}/comments`) return respond(200, { reviewRound: round, comments: structuredClone(comments) });
   if (config.url === `/rounds/${emptyRoundId}/comments`) return respond(200, { reviewRound: { ...round, id: emptyRoundId, version: 2, name: 'Üres review kör' }, comments: [] });
   if (config.method === 'post' && config.url.endsWith('/replies')) {

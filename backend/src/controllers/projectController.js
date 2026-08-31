@@ -1,31 +1,29 @@
-import { createProject, getProjects, getProjectById, updateProject, deleteProject } from '../services/projectService.js';
+import { createProject, getProjects, getProjectById, updateProject, updateProjectOrigins, deleteProject } from '../services/projectService.js';
+import { normalizeAllowedOrigins } from '../utils/projectUrl.js';
 
 export const create = async (req, res) => {
   try {
+    if (!req.body || Array.isArray(req.body) || Object.keys(req.body).some((key) => !['organizationId', 'name', 'allowedDomains'].includes(key))) {
+      return res.status(400).json({ success: false, message: 'Invalid project details' });
+    }
     const { organizationId, name, allowedDomains } = req.body;
 
-    if (!organizationId || !name?.trim()) {
+    if (typeof organizationId !== 'string' || typeof name !== 'string' || !name.trim() || name.length > 160 || name.includes('\0')) {
       return res.status(400).json({
         success: false,
         message: 'organizationId and name are required',
       });
     }
 
-    if (
-      allowedDomains !== undefined &&
-      !Array.isArray(allowedDomains)
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: 'allowedDomains must be an array',
-      });
-    }
+    const normalizedDomains = allowedDomains === undefined
+      ? undefined
+      : normalizeAllowedOrigins(allowedDomains, { allowEmpty: true });
 
     const project = await createProject({
       userId: req.user.id,
       organizationId,
       name,
-      allowedDomains,
+      allowedDomains: normalizedDomains,
     });
 
     return res.status(201).json({
@@ -33,7 +31,10 @@ export const create = async (req, res) => {
       project,
     });
   } catch (error) {
-    if (error.message === 'ORGANIZATION_ACCESS_DENIED') {
+    if (error.message === 'INVALID_ALLOWED_ORIGINS') {
+      return res.status(400).json({ success: false, message: 'Use valid HTTPS origins (HTTP is allowed only on localhost)' });
+    }
+    if (error.message === 'USER_NOT_MEMBER_OF_ORGANIZATION') {
       return res.status(403).json({
         success: false,
         message: 'You do not have access to this organization',
@@ -97,6 +98,10 @@ export const getOne = async (req, res) => {
 
 export const update = async (req, res) => {
   try {
+    if (!req.body || Array.isArray(req.body) || Object.keys(req.body).length === 0 ||
+        Object.keys(req.body).some((key) => !['name', 'allowedDomains'].includes(key))) {
+      return res.status(400).json({ success: false, message: 'Invalid project update' });
+    }
     const {
       name,
       allowedDomains,
@@ -104,7 +109,7 @@ export const update = async (req, res) => {
 
     if (
       name !== undefined &&
-      !name.trim()
+      (typeof name !== 'string' || !name.trim() || name.length > 160 || name.includes('\0'))
     ) {
       return res.status(400).json({
         success: false,
@@ -112,21 +117,15 @@ export const update = async (req, res) => {
       });
     }
 
-    if (
-      allowedDomains !== undefined &&
-      !Array.isArray(allowedDomains)
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: 'allowedDomains must be an array',
-      });
-    }
+    const normalizedDomains = allowedDomains === undefined
+      ? undefined
+      : normalizeAllowedOrigins(allowedDomains);
 
     const project = await updateProject({
       userId: req.user.id,
       projectId: req.params.id,
       name,
-      allowedDomains,
+      allowedDomains: normalizedDomains,
     });
 
     return res.status(200).json({
@@ -139,6 +138,18 @@ export const update = async (req, res) => {
         success: false,
         message: 'Project not found',
       });
+    }
+
+    if (error.message === 'PROJECT_SETTINGS_FORBIDDEN') {
+      return res.status(403).json({ success: false, message: 'Only owners and admins can change project origins' });
+    }
+
+    if (error.message === 'ORIGIN_IN_USE') {
+      return res.status(409).json({ success: false, message: 'An existing review round uses this origin' });
+    }
+
+    if (error.message === 'INVALID_ALLOWED_ORIGINS') {
+      return res.status(400).json({ success: false, message: 'Use valid HTTPS origins (HTTP is allowed only on localhost)' });
     }
 
     console.error('Update project error:', error);
@@ -179,5 +190,36 @@ export const remove = async (req, res) => {
       success: false,
       message: 'Internal server error',
     });
+  }
+};
+
+export const updateOrigins = async (req, res) => {
+  try {
+    const body = req.body;
+    if (!body || Array.isArray(body) || Object.keys(body).length !== 1 || !Object.hasOwn(body, 'origins')) {
+      return res.status(400).json({ success: false, message: 'origins is required' });
+    }
+    const allowedDomains = normalizeAllowedOrigins(body.origins);
+    const project = await updateProjectOrigins({
+      userId: req.user.id,
+      projectId: req.params.id,
+      allowedDomains,
+    });
+    return res.json({ success: true, project });
+  } catch (error) {
+    if (error.message === 'INVALID_ALLOWED_ORIGINS') {
+      return res.status(400).json({ success: false, message: 'Use valid HTTPS origins (HTTP is allowed only on localhost)' });
+    }
+    if (error.message === 'PROJECT_NOT_FOUND') {
+      return res.status(404).json({ success: false, message: 'Project not found' });
+    }
+    if (error.message === 'PROJECT_SETTINGS_FORBIDDEN') {
+      return res.status(403).json({ success: false, message: 'Only owners and admins can change project origins' });
+    }
+    if (error.message === 'ORIGIN_IN_USE') {
+      return res.status(409).json({ success: false, message: 'An existing review round uses this origin' });
+    }
+    console.error('Update project origins error:', error);
+    return res.status(500).json({ success: false, message: 'Internal server error' });
   }
 };

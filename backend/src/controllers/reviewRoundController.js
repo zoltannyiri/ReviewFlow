@@ -1,4 +1,5 @@
 import { createReviewRound, getReviewRounds, getReviewRoundById, updateReviewRound, deleteReviewRound } from '../services/reviewRoundService.js';
+import { parseTargetUrl } from '../utils/projectUrl.js';
 
 const VALID_STATUSES = [
   'DRAFT',
@@ -7,45 +8,30 @@ const VALID_STATUSES = [
   'CLOSED',
 ];
 
-const isValidUrl = (value) => {
-  try {
-    const url = new URL(value);
-
-    return (
-      url.protocol === 'http:' ||
-      url.protocol === 'https:'
-    );
-  } catch {
-    return false;
-  }
-};
-
 export const create = async (req, res) => {
   try {
+    if (!req.body || Array.isArray(req.body) || Object.keys(req.body).some((key) => !['name', 'targetUrl'].includes(key))) {
+      return res.status(400).json({ success: false, message: 'Invalid review round details' });
+    }
     const {
       name,
       targetUrl,
     } = req.body;
 
-    if (!name?.trim() || !targetUrl?.trim()) {
+    if (typeof name !== 'string' || !name.trim() || name.length > 160 || name.includes('\0') || typeof targetUrl !== 'string') {
       return res.status(400).json({
         success: false,
         message: 'name and targetUrl are required',
       });
     }
 
-    if (!isValidUrl(targetUrl)) {
-      return res.status(400).json({
-        success: false,
-        message: 'targetUrl must be a valid URL',
-      });
-    }
+    const normalizedTargetUrl = parseTargetUrl(targetUrl).href;
 
     const reviewRound = await createReviewRound({
       userId: req.user.id,
       projectId: req.params.projectId,
       name,
-      targetUrl,
+      targetUrl: normalizedTargetUrl,
     });
 
     return res.status(201).json({
@@ -58,6 +44,10 @@ export const create = async (req, res) => {
         success: false,
         message: 'Project not found',
       });
+    }
+
+    if (['INVALID_TARGET_URL', 'TARGET_DOMAIN_NOT_ALLOWED'].includes(error.message)) {
+      return res.status(400).json({ success: false, message: 'Use a URL from the project allowed origins' });
     }
 
     console.error(
@@ -138,6 +128,10 @@ export const getOne = async (req, res) => {
 
 export const update = async (req, res) => {
   try {
+    if (!req.body || Array.isArray(req.body) || Object.keys(req.body).length === 0 ||
+        Object.keys(req.body).some((key) => !['name', 'targetUrl', 'status'].includes(key))) {
+      return res.status(400).json({ success: false, message: 'Invalid review round update' });
+    }
     const {
       name,
       targetUrl,
@@ -146,7 +140,7 @@ export const update = async (req, res) => {
 
     if (
       name !== undefined &&
-      !name?.trim()
+      (typeof name !== 'string' || !name.trim() || name.length > 160 || name.includes('\0'))
     ) {
       return res.status(400).json({
         success: false,
@@ -156,7 +150,7 @@ export const update = async (req, res) => {
 
     if (
       targetUrl !== undefined &&
-      !isValidUrl(targetUrl)
+      typeof targetUrl !== 'string'
     ) {
       return res.status(400).json({
         success: false,
@@ -174,11 +168,12 @@ export const update = async (req, res) => {
       });
     }
 
+    const normalizedTargetUrl = targetUrl === undefined ? undefined : parseTargetUrl(targetUrl).href;
     const reviewRound = await updateReviewRound({
       userId: req.user.id,
       reviewRoundId: req.params.id,
       name,
-      targetUrl,
+      targetUrl: normalizedTargetUrl,
       status,
     });
 
@@ -194,6 +189,10 @@ export const update = async (req, res) => {
         success: false,
         message: 'Review round not found',
       });
+    }
+
+    if (['INVALID_TARGET_URL', 'TARGET_DOMAIN_NOT_ALLOWED'].includes(error.message)) {
+      return res.status(400).json({ success: false, message: 'Use a URL from the project allowed origins' });
     }
 
     console.error(

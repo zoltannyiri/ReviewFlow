@@ -20,6 +20,8 @@ export const useDeveloperAction = (onSessionExpired) => {
       if (status === 401) onSessionExpired();
       else setError(status === 400
         ? 'Ellenőrizd a megadott adatokat, a HTTPS-címet és az engedélyezett domaint.'
+        : status === 409
+          ? 'Ezt az origint még használja egy review kör, ezért nem távolítható el.'
         : status === 403 || status === 404
           ? 'Az erőforrás nem érhető el, vagy nincs hozzáférésed.'
           : 'A művelet eredménye nem erősíthető meg. Újrapróbálás előtt frissítsd a listát, nehogy kétszer hozd létre.');

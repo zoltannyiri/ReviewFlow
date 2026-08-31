@@ -1,43 +1,41 @@
 import prisma from '../config/prisma.js';
 import { getProjectById } from './projectService.js';
+import { isAllowedOrigin, parseTargetUrl } from '../utils/projectUrl.js';
 
 export const createReviewRound = async ({ userId, projectId, name, targetUrl }) => {
-  await getProjectById(userId, projectId);
+  const project = await getProjectById(userId, projectId);
+  const url = parseTargetUrl(targetUrl);
+  if (!(project.allowedDomains || []).length || !isAllowedOrigin(url.origin, project, url.href)) {
+    throw new Error('TARGET_DOMAIN_NOT_ALLOWED');
+  }
 
-  const latestRound = await prisma.reviewRound.findFirst({
-    where: {
-      projectId,
-    },
-    orderBy: {
-      version: 'desc',
-    },
-    select: {
-      version: true,
-    },
-  });
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const latestRound = await prisma.reviewRound.findFirst({
+      where: { projectId },
+      orderBy: { version: 'desc' },
+      select: { version: true },
+    });
 
-  const nextVersion = latestRound
-    ? latestRound.version + 1
-    : 1;
-
-  return prisma.reviewRound.create({
-    data: {
-      projectId,
-      name: name.trim(),
-      targetUrl: targetUrl.trim(),
-      version: nextVersion,
-      status: 'DRAFT',
-    },
-    include: {
-      project: {
-        select: {
-          id: true,
-          name: true,
-          publicKey: true,
+    try {
+      return await prisma.reviewRound.create({
+        data: {
+          projectId,
+          name: name.trim(),
+          targetUrl: url.href,
+          version: latestRound ? latestRound.version + 1 : 1,
+          status: 'DRAFT',
         },
-      },
-    },
-  });
+        include: {
+          project: {
+            select: { id: true, name: true, publicKey: true, allowedDomains: true },
+          },
+        },
+      });
+    } catch (error) {
+      if (error.code !== 'P2002' || attempt === 2) throw error;
+    }
+  }
+  throw new Error('REVIEW_ROUND_CREATE_FAILED');
 };
 
 export const getReviewRounds = async ({ userId, projectId }) => {
@@ -92,6 +90,13 @@ export const updateReviewRound = async ({ userId, reviewRoundId, name, targetUrl
     userId,
     reviewRoundId,
   });
+
+  if (targetUrl !== undefined) {
+    const url = parseTargetUrl(targetUrl);
+    if (!isAllowedOrigin(url.origin, reviewRound.project, reviewRound.targetUrl)) {
+      throw new Error('TARGET_DOMAIN_NOT_ALLOWED');
+    }
+  }
 
   return prisma.reviewRound.update({
     where: {

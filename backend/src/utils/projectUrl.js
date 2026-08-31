@@ -12,6 +12,22 @@ export const parseTargetUrl = (value) => {
   return url;
 };
 
+export const normalizeAllowedOrigins = (values, { allowEmpty = false } = {}) => {
+  if (!Array.isArray(values) || values.length > 20) {
+    throw new Error('INVALID_ALLOWED_ORIGINS');
+  }
+
+  const origins = [];
+  for (const value of values) {
+    let origin;
+    try { origin = parseTargetUrl(value).origin; } catch { throw new Error('INVALID_ALLOWED_ORIGINS'); }
+    if (!origins.includes(origin)) origins.push(origin);
+  }
+
+  if (!allowEmpty && origins.length === 0) throw new Error('INVALID_ALLOWED_ORIGINS');
+  return origins;
+};
+
 export const isAllowedOrigin = (origin, project, targetUrl) => {
   let target;
   try { target = parseTargetUrl(targetUrl); } catch { return false; }

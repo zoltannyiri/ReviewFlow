@@ -31,10 +31,15 @@ let savedComments = [
 const nativeFetch = window.fetch;
 let postCount = 0;
 let replyCount = 0;
+let connectionCount = 0;
 window.fetch = async (input, options = {}) => {
   const url = new URL(input, window.location.origin);
   if (!url.pathname.startsWith('/__reviewflow_test_api/')) {
     return nativeFetch(input, options);
+  }
+  if (options.method === 'POST' && url.pathname.endsWith('/connection')) {
+    ++connectionCount;
+    return Response.json({ success: true }, { status: JSON.parse(options.body).projectKey === 'fixture-project-key' ? 200 : 403 });
   }
   if (options.method === 'POST' && url.pathname.endsWith('/replies')) {
     ++replyCount;
@@ -273,6 +278,29 @@ await test('Leállítás után eltűnik a UI, új init után visszatölthető', 
 await runReplyBrowserChecks({
   test, assert, settle, sdkRoot, getReplyCount: () => replyCount,
   reinitialize: () => { session = ReviewFlow.init({ apiUrl }); },
+});
+
+await test('Projektkulccsal az SDK ellenőrzi a bekötést és betölti a kommenteket', async () => {
+  const before = connectionCount;
+  session = ReviewFlow.init({ apiUrl, projectKey: 'fixture-project-key' });
+  await settle();
+  assert(connectionCount === before + 1, 'Missing connection request');
+  assert(sdkRoot().querySelector('[aria-haspopup="dialog"]'), 'Comments did not load');
+});
+await test('Hibás projektkulccsal nem jelennek meg kommentek és nem indítható kijelölés', async () => {
+  session = ReviewFlow.init({ apiUrl, projectKey: 'wrong-key' });
+  await settle();
+  assert(!sdkRoot().querySelector('[aria-haspopup="dialog"]'), 'Wrong project was loaded');
+  selectHeading();
+  assert(sdkRoot().querySelector('[aria-label="Megjegyzés szövege"]').parentElement.style.display === 'none', 'Unauthorized picker');
+});
+await test('Projektkulcs önmagában nem aktivál review módot vagy kapcsolatjelzést', () => {
+  session.destroy();
+  history.replaceState(null, '', noSessionUrl);
+  const before = connectionCount;
+  assert(ReviewFlow.init({ apiUrl, projectKey: 'fixture-project-key' }) === undefined, 'Unexpected session');
+  assert(connectionCount === before && !sdkRoot(), 'Unexpected connection');
+  history.replaceState(null, '', initialUrl);
 });
 
 // Reset the fixture to the documented 3-comment example for manual interaction.

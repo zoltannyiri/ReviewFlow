@@ -9,7 +9,7 @@ export const organizations = (req, res) => res.json({ success: true,
 export const onboard = async (req, res) => {
   const body = req.body;
   if (!body || Array.isArray(body) || Object.keys(body).some((key) => !['organizationId', 'name', 'targetUrl'].includes(key)) ||
-      typeof body.organizationId !== 'string' || !/^[0-9a-f-]{36}$/i.test(body.organizationId) ||
+      typeof body.organizationId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(body.organizationId) ||
       typeof body.name !== 'string' || !body.name.trim() || body.name.length > 160 || body.name.includes('\0')) {
     return res.status(400).json({ success: false, message: 'Invalid project details' });
   }
@@ -26,7 +26,8 @@ export const onboard = async (req, res) => {
       reviewRounds: { create: { name: 'Első ügyfél review', version: 1, targetUrl: url.href } },
     }, include: { organization: { select: { id: true, name: true } }, reviewRounds: true } });
     const { reviewRounds, ...project } = created;
-    return res.status(201).json({ success: true, project, reviewRound: reviewRounds[0] });
+    const role = req.user.memberships.find(({ organization }) => organization.id === body.organizationId)?.role || null;
+    return res.status(201).json({ success: true, project: { ...project, role }, reviewRound: reviewRounds[0] });
   } catch (error) {
     if (error.code === 'P2025') return res.status(404).json({ success: false, message: 'Organization not found' });
     console.error('Project setup failed:', error.code || error.name);
@@ -55,7 +56,9 @@ export const connectSdk = async (req, res) => {
       id: review.link.id, isActive: true, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
     } } }, data: { sdkLastSeenAt: new Date(), sdkLastOrigin: req.get('Origin') } });
     return res.json({ success: true });
-  } catch {
-    return res.status(410).json({ success: false, message: 'Review link is no longer available' });
+  } catch (error) {
+    if (error.code === 'P2025') return res.status(410).json({ success: false, message: 'Review link is no longer available' });
+    console.error('SDK connection failed:', error.code || error.name);
+    return res.status(500).json({ success: false, message: 'SDK connection could not be recorded' });
   }
 };

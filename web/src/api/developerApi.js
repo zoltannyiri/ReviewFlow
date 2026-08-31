@@ -14,6 +14,9 @@ export const createDeveloperApi = (accessToken) => {
     get(path, { signal } = {}) {
       return api.get(path, { headers, signal });
     },
+    patch(path, body, { signal } = {}) {
+      return api.patch(path, body, { headers, signal });
+    },
     resolveComment(id, { signal } = {}) {
       return api.patch(`/comments/${encodeURIComponent(id)}`, {
         status: 'RESOLVED',

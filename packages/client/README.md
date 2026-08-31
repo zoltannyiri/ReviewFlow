@@ -61,8 +61,8 @@ npm --prefix web run lint
 node web/node_modules/eslint/bin/eslint.js --no-config-lookup --config web/eslint.config.js packages/client/src packages/client/tests
 ```
 
-A 11 Node-teszt az azonosító-prioritást, az útvonalszétválasztást, a geometriai
-fallbacket, a kulcsütközéseket és az adatmegőrzést ellenőrzi.
+A 13 Node-teszt az azonosító-prioritást, az útvonalszétválasztást, a geometriai
+fallbacket, a kulcsütközéseket, az adatmegőrzést és a cél-URL képzését ellenőrzi.
 
 Az önellenőrző böngészőteszt a már telepített webes Vite-ot használja:
 
@@ -71,7 +71,7 @@ npm --prefix packages/client run test:browser
 ```
 
 Nyisd meg: <http://127.0.0.1:5174/tests/browser.html>.
-Az oldal alján az elvárt eredmény: **28 sikeres, 0 sikertelen teszt.**
+Az oldal alján az elvárt eredmény: **31 sikeres, 0 sikertelen teszt.**
 A tesztek után a főcímhez 3, a CTA-hoz 1, a koordinátás célponthoz 2 komment
 marad a kézi próbához. Az oldalon szándékosan agresszív gomb- és textarea-CSS
 teszteli az elkülönítést. Mentési/betöltési hibák, DOM-csere és újrainicializálás
@@ -112,17 +112,16 @@ Nem helyettesíti a következő, valódi adatbázissal végzett próbát.
   jelenleg `data-review-id` vagy HTML `id` szükséges; új selector/adatmodell nem készült.
 - SPA-session megőrzés, útvonalváltás automatikus észlelése, vendégoldali
   státuszmódosítás és élő válaszfrissítés továbbra is későbbi mérföldkövek.
-- `web/src/pages/ReviewPage.jsx`: a cél-URL-hez fűzött `?rf_session=...` meglévő
-  query/hash esetén hibás URL-t adhat. A nyers token naplózását és az ismételt
-  deaktiválás `tokenHash`-visszaadását a következő mérföldkő már javította.
+- A cél-URL query/hash kezelése, a nyers token naplózása és az ismételt
+  deaktiválás hash-visszaadása már javítva.
 - `backend/src/controllers/commentController.js`: nincs explicit szövegtípus- és
   kommenthossz-validáció; például nem szöveges `comment` 400 helyett 500-at okozhat.
-- `backend/src/app.js`: általános `cors()` van beállítva; a projekt-domain
-  ellenőrzése és a nyilvános API rate limitje még hiányzik.
-- `backend/src/routes/reviewLinkRoutes.js`: a public review GET és komment POST
-  duplán van regisztrálva.
+- A projekt-origin ellenőrzése elkészült, a nyilvános API rate limitje még hiányzik.
+  A duplikált public route-regisztrációk megszűntek.
 
 A fejlesztői lezárás és az új `/developer` oldal részleteit a
 `docs/comment-resolution.md` dokumentálja a repository gyökerében.
 A válaszadás API-ját, jogosultságait és platformfüggetlen beépítésének feltételeit
 a `docs/comment-replies.md` írja le.
+A projektfelvételt, az új `/sdk/` modul-kiszolgálást és a projektkulcsos
+kapcsolatellenőrzést a `docs/project-onboarding.md` dokumentálja.

@@ -18,6 +18,7 @@ app.use('/sdk', cors(), express.static(fileURLToPath(new URL('../../packages/cli
   dotfiles: 'deny', index: false, maxAge: 0,
 }));
 app.use(express.json({ limit: '32kb' }));
+app.use('/api', (req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
 app.use('/api/review/:token', reviewOrigin);
 app.use('/api', (req, res, next) => {
   if (req.path.startsWith('/review/')) return next();

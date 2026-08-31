@@ -1,6 +1,6 @@
 import express from 'express';
 
-import { create, list, getOne, update, remove } from '../controllers/projectController.js';
+import { create, list, getOne, update, updateOrigins, remove } from '../controllers/projectController.js';
 
 import { requireAuth } from '../middleware/authMiddleware.js';
 import { onboard } from '../controllers/projectSetupController.js';
@@ -14,6 +14,7 @@ router.post('/', create);
 router.post('/onboard', onboard);
 
 router.get('/:id', getOne);
+router.patch('/:id/origins', updateOrigins);
 router.patch('/:id', update);
 router.delete('/:id', remove);
 

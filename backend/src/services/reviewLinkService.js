@@ -27,7 +27,7 @@ export const createReviewLink = async ({
 
   const target = parseTargetUrl(reviewRound.targetUrl);
   if (!isAllowedOrigin(target.origin, reviewRound.project, target.href)) throw new Error('TARGET_DOMAIN_NOT_ALLOWED');
-  parseTargetUrl(process.env.FRONTEND_URL);
+  const frontend = parseTargetUrl(process.env.FRONTEND_URL);
   const token = generateToken();
   const tokenHash = hashToken(token);
 
@@ -51,7 +51,7 @@ export const createReviewLink = async ({
 
     token,
 
-    reviewUrl: `${process.env.FRONTEND_URL}/r/${token}`,
+    reviewUrl: new URL('/r/' + token, frontend.origin).href,
   };
 };
 

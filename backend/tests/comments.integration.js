@@ -6,6 +6,7 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import prisma from '../src/config/prisma.js';
 import { runReplyChecks } from './helpers/replyChecks.js';
+import { runSetupChecks } from './helpers/setupChecks.js';
 
 test('real PostgreSQL + HTTP: comment access, resolution and token safety (rolled back)', async (t) => {
   const rollback = new Error('ROLL_BACK_TEST_FIXTURES');
@@ -55,15 +56,16 @@ test('real PostgreSQL + HTTP: comment access, resolution and token safety (rolle
         server = app.listen(0, '127.0.0.1');
         await once(server, 'listening');
         const base = `http://127.0.0.1:${server.address().port}/api`;
-        const request = async (path, { token, method = 'GET', body } = {}) => {
-          const headers = {};
+        const request = async (path, { token, method = 'GET', body, origin, headers: extraHeaders } = {}) => {
+          const headers = { ...extraHeaders };
+          if (origin) headers.Origin = origin;
           if (token) headers.Authorization = `Bearer ${token}`;
           if (body !== undefined) headers['Content-Type'] = 'application/json';
           const response = await fetch(`${base}${path}`, {
             method, headers, body: body === undefined ? undefined : JSON.stringify(body),
           });
           const text = await response.text();
-          return { status: response.status, body: text.startsWith('{') ? JSON.parse(text) : text };
+          return { status: response.status, headers: response.headers, body: text.startsWith('{') ? JSON.parse(text) : text };
         };
         const resolve = (id, token, body = { status: 'RESOLVED' }) => request(`/comments/${id}`, { token, method: 'PATCH', body });
 
@@ -78,6 +80,10 @@ test('real PostgreSQL + HTTP: comment access, resolution and token safety (rolle
           assert.equal(rounds.status, 200);
           assert.deepEqual(rounds.body.reviewRounds.map((item) => item.id), [emptyRound.id, round.id]);
           assert.equal((await request(`/rounds/${round.id}/comments`, { token })).status, 200);
+          assert.equal((await request(`/projects/${project.id}/rounds`, { token, method: 'POST',
+            body: { name: 'Unapproved origin', targetUrl: 'https://unapproved.example' } })).status, 400);
+          assert.equal((await request(`/rounds/${round.id}`, { token, method: 'PATCH',
+            body: { targetUrl: 'https://unapproved.example' } })).status, 400);
         });
 
         await t.test('guest, missing, invalid, expired and wrong-audience tokens cannot resolve', async () => {
@@ -127,6 +133,8 @@ test('real PostgreSQL + HTTP: comment access, resolution and token safety (rolle
           tx, request, owner, comment, otherComment, emptyRound, round, link,
           ownerToken, memberToken, outsiderToken, rawGuestToken,
         });
+
+        await runSetupChecks(t, { tx, request, org, ownerToken, memberToken, outsiderToken });
 
         await t.test('revoked membership cannot list or resolve with an otherwise valid JWT', async () => {
           await tx.organizationMember.delete({ where: { organizationId_userId: { organizationId: org.id, userId: member.id } } });

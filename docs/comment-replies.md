@@ -1,5 +1,8 @@
 # Kommentenkénti beszélgetések
 
+Az azóta elkészült projektfelvétel, SDK-beépítés és domainellenőrzés leírása:
+[Valódi weboldal hozzáadása](project-onboarding.md). Az alábbi korlátlista a válaszadási mérföldkő állapotát rögzíti.
+
 A fejlesztő a `/developer` oldalon, az ügyfél a céloldal SDK-paneljén válaszolhat
 egy meglévő kommentre. A beszélgetés nem hoz létre új pint, nem növeli a
 kommentszámlálót, és nem módosítja sem a komment, sem a review kör státuszát.
@@ -96,7 +99,7 @@ node web/node_modules/eslint/bin/eslint.js --no-config-lookup --config web/eslin
 npm --prefix packages/client run test:browser
 ```
 
-Az SDK `/tests/browser.html` tesztoldalán 28 sikeres ellenőrzés az elvárt eredmény.
+Az SDK `/tests/browser.html` tesztoldalán jelenleg 31 sikeres ellenőrzés az elvárt eredmény.
 A webes `/tests/developer.html` szimulált belépéssel, mentési hibakapcsolóval és
 válaszokkal tesztelhető; egyik tesztoldal sem ír valódi adatokat.
 A backend integrációs teszt valódi HTTP/JWT/Prisma/PostgreSQL mellett ellenőrzi

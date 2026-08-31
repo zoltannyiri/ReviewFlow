@@ -2,6 +2,7 @@
 
 Ez a dokumentum a lezárási mérföldkövet írja le. Az azóta elkészült
 kommentenkénti válaszadás külön leírása: [Kommentválaszok](comment-replies.md).
+A projektfelvétel és megosztás későbbi mérföldköve: [Valódi weboldal hozzáadása](project-onboarding.md).
 
 ## Használat
 

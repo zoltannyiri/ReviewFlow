@@ -1,4 +1,14 @@
-import prisma from "../config/prisma.js"
+import prisma from '../config/prisma.js';
+import { parseTargetUrl } from '../utils/projectUrl.js';
+
+const editableRoles = ['OWNER', 'ADMIN'];
+
+const exposeMembershipRole = (project) => {
+  const members = project.organization?.members;
+  if (!members) return project;
+  const organization = { id: project.organization.id, name: project.organization.name };
+  return { ...project, organization, role: members[0]?.role || null };
+};
 
 const getMembership = async (userId, organizationId) => {
   return prisma.organizationMember.findUnique({
@@ -12,13 +22,13 @@ const getMembership = async (userId, organizationId) => {
 };
 
 export const createProject = async ({ name, allowedDomains, organizationId, userId }) => {
-  const membership = await getMembership(userId, organizationId)
+  const membership = await getMembership(userId, organizationId);
 
   if (!membership) {
-    throw new Error('USER_NOT_MEMBER_OF_ORGANIZATION')
+    throw new Error('USER_NOT_MEMBER_OF_ORGANIZATION');
   }
 
-  return prisma.project.create({
+  const project = await prisma.project.create({
     data: {
       name: name.trim(),
       allowedDomains,
@@ -40,12 +50,13 @@ export const createProject = async ({ name, allowedDomains, organizationId, user
           lastName: true,
         },
       },
-    }
-  })
-}
+    },
+  });
+  return { ...project, role: membership.role };
+};
 
 export const getProjects = async (userId) => {
-  return prisma.project.findMany({
+  const projects = await prisma.project.findMany({
     where: {
       organization: {
         members: {
@@ -60,6 +71,10 @@ export const getProjects = async (userId) => {
         select: {
           id: true,
           name: true,
+          members: {
+            where: { userId },
+            select: { role: true },
+          },
         },
       },
     },
@@ -67,6 +82,7 @@ export const getProjects = async (userId) => {
       createdAt: 'desc',
     },
   });
+  return projects.map(exposeMembershipRole);
 };
 
 export const getProjectById = async (userId, projectId) => {
@@ -87,6 +103,10 @@ export const getProjectById = async (userId, projectId) => {
         select: {
           id: true,
           name: true,
+          members: {
+            where: { userId },
+            select: { role: true },
+          },
         },
       },
 
@@ -105,7 +125,38 @@ export const getProjectById = async (userId, projectId) => {
     throw new Error('PROJECT_NOT_FOUND');
   }
 
-  return project;
+  return exposeMembershipRole(project);
+};
+
+export const updateProjectOrigins = async ({ userId, projectId, allowedDomains }) => {
+  const project = await getProjectById(userId, projectId);
+  if (!editableRoles.includes(project.role)) throw new Error('PROJECT_SETTINGS_FORBIDDEN');
+
+  const rounds = await prisma.reviewRound.findMany({
+    where: { projectId },
+    select: { targetUrl: true },
+  });
+  const requiredOrigins = new Set(rounds.map(({ targetUrl }) => parseTargetUrl(targetUrl).origin));
+  if ([...requiredOrigins].some((origin) => !allowedDomains.includes(origin))) {
+    throw new Error('ORIGIN_IN_USE');
+  }
+
+  try {
+    const updated = await prisma.project.update({
+      where: {
+        id: projectId,
+        organization: { members: { some: { userId, role: { in: editableRoles } } } },
+      },
+      data: { allowedDomains },
+      include: {
+        organization: { select: { id: true, name: true } },
+      },
+    });
+    return { ...updated, role: project.role };
+  } catch (error) {
+    if (error.code === 'P2025') throw new Error('PROJECT_SETTINGS_FORBIDDEN');
+    throw error;
+  }
 };
 
 export const updateProject = async ({
@@ -114,9 +165,15 @@ export const updateProject = async ({
   name,
   allowedDomains,
 }) => {
-  const project = await getProjectById(userId, projectId);
+  let project = await getProjectById(userId, projectId);
 
-  return prisma.project.update({
+  if (allowedDomains !== undefined) {
+    project = await updateProjectOrigins({ userId, projectId, allowedDomains });
+  }
+
+  if (name === undefined) return project;
+
+  const updated = await prisma.project.update({
     where: {
       id: project.id,
     },
@@ -125,11 +182,10 @@ export const updateProject = async ({
         name: name.trim(),
       }),
 
-      ...(allowedDomains !== undefined && {
-        allowedDomains,
-      }),
     },
+    include: { organization: { select: { id: true, name: true } } },
   });
+  return { ...updated, role: project.role };
 };
 
 export const deleteProject = async ({ userId, projectId }) => {
