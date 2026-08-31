@@ -9,7 +9,7 @@ import { createUiRoot } from './uiRoot.js';
 let activeReview = null;
 
 const ReviewFlow = {
-  init({ apiUrl = 'http://localhost:5000/api' } = {}) {
+  init({ apiUrl = 'http://localhost:5000/api', projectKey } = {}) {
     const sessionToken = new URLSearchParams(
       window.location.search
     ).get('rf_session');
@@ -34,6 +34,9 @@ const ReviewFlow = {
     let destroyed = false;
     let loadVersion = 0;
     let comments = [];
+    let ready = false;
+    let connected = false;
+    const connectionController = new AbortController();
 
     const toolbar = document.createElement('div');
     toolbar.setAttribute('data-reviewflow-ui', 'true');
@@ -70,11 +73,20 @@ const ReviewFlow = {
       const version = ++loadVersion;
       const pathname = window.location.pathname;
       try {
+        if (projectKey && !connected) {
+          const response = await fetch(apiUrl + '/review/' + encodeURIComponent(sessionToken) + '/connection', {
+            method: 'POST', signal: connectionController.signal,
+            headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectKey }),
+          });
+          if (!response.ok) throw new Error('SDK connection rejected');
+          connected = true;
+        }
         const loaded = await getComments({ apiUrl, sessionToken, pathname });
         if (destroyed || version !== loadVersion ||
             pathname !== window.location.pathname) return;
 
         comments = loaded;
+        ready = true;
         renderComments();
         toolbar.textContent = toolbarLabel;
       } catch {
@@ -100,6 +112,7 @@ const ReviewFlow = {
 
     const picker = createElementPicker({
       onSelect(element) {
+        if (!ready) return;
         panel.close({ restoreFocus: false });
         commentBox.open(element);
       },
@@ -109,6 +122,7 @@ const ReviewFlow = {
       destroy() {
         if (destroyed) return;
         destroyed = true;
+        connectionController.abort();
         ++loadVersion;
         picker.destroy();
         commentBox.destroy();

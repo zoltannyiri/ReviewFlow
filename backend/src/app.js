@@ -5,11 +5,26 @@ import projectRoutes from './routes/projectRoutes.js';
 import reviewRoundRoutes from './routes/reviewRoundRoutes.js';
 import reviewLinkRoutes from './routes/reviewLinkRoutes.js';
 import commentRoutes from './routes/commentRoutes.js';
+import { fileURLToPath } from 'node:url';
+import { reviewOrigin } from './middleware/reviewOrigin.js';
+import { frontendOrigin } from './utils/projectUrl.js';
+import { requireAuth } from './middleware/authMiddleware.js';
+import { organizations, connectionStatus } from './controllers/projectSetupController.js';
 
 // Export the real application so HTTP integration tests use the same routes.
 const app = express();
-app.use(cors());
-app.use(express.json());
+// Only public SDK modules are served, never the repository or backend files.
+app.use('/sdk', cors(), express.static(fileURLToPath(new URL('../../packages/client/src/', import.meta.url)), {
+  dotfiles: 'deny', index: false, maxAge: 0,
+}));
+app.use(express.json({ limit: '32kb' }));
+app.use('/api/review/:token', reviewOrigin);
+app.use('/api', (req, res, next) => {
+  if (req.path.startsWith('/review/')) return next();
+  return cors({ origin: (origin, done) => done(null, origin === frontendOrigin()) })(req, res, next);
+});
+app.get('/api/organizations', requireAuth, organizations);
+app.get('/api/rounds/:id/connection', requireAuth, connectionStatus);
 app.use('/api/auth', authRoutes);
 app.use('/api/projects', projectRoutes);
 app.use('/api', reviewRoundRoutes);

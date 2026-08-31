@@ -14,6 +14,7 @@ import {
 
 import { requireAuth } from '../middleware/authMiddleware.js';
 import { createGuest } from '../controllers/commentReplyController.js';
+import { connectSdk } from '../controllers/projectSetupController.js';
 
 const router = express.Router();
 
@@ -24,10 +25,7 @@ router.get( '/rounds/:id/links', requireAuth, list );
 router.delete( '/links/:id', requireAuth, deactivate );
 
 router.post('/review/:token/comments/:id/replies', createGuest);
-
-router.get( '/review/:token', publicReview );
-
-router.post( '/review/:token/comments', createComment );
+router.post('/review/:token/connection', connectSdk);
 
 router.get( '/review/:token', publicReview );
 

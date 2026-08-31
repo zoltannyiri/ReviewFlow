@@ -35,6 +35,9 @@ export const create = async (req, res) => {
       reviewLink,
     });
   } catch (error) {
+    if (['INVALID_TARGET_URL', 'TARGET_DOMAIN_NOT_ALLOWED'].includes(error.message)) {
+      return res.status(400).json({ success: false, message: 'Check target domain and FRONTEND_URL configuration' });
+    }
     if (error.message === 'REVIEW_ROUND_NOT_FOUND') {
       return res.status(404).json({
         success: false,

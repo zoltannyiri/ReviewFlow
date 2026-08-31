@@ -102,6 +102,9 @@ model ReviewRound {
 
   status ReviewRoundStatus @default(DRAFT)
 
+  sdkLastSeenAt DateTime?
+  sdkLastOrigin String?
+
   project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
   reviewLinks ReviewLink[]
   comments    Comment[]

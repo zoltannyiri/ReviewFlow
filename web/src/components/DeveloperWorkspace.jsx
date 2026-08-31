@@ -2,10 +2,12 @@ import { useMemo, useState } from 'react';
 import { createDeveloperApi } from '../api/developerApi.js';
 import { useDeveloperResource } from '../hooks/useDeveloperResource.js';
 import RoundComments from './RoundComments.jsx';
+import NewProjectForm from './NewProjectForm.jsx';
+import ProjectSetup from './ProjectSetup.jsx';
 
-function ProjectRounds({ client, projectId, onSessionExpired }) {
+function ProjectRounds({ client, projectId, project, initialRoundId = '', onSessionExpired }) {
   const resource = useDeveloperResource(client, `/projects/${projectId}/rounds`, onSessionExpired);
-  const [roundId, setRoundId] = useState('');
+  const [roundId, setRoundId] = useState(initialRoundId);
 
   if (resource.loading) return <p role="status">Review körök betöltése…</p>;
   if (resource.error) return <div><p role="alert" className="dev-error">{resource.error}</p>
@@ -23,6 +25,8 @@ function ProjectRounds({ client, projectId, onSessionExpired }) {
           </option>)}
         </select>
       </label>
+      {roundId && rounds.some((round) => round.id === roundId) && <ProjectSetup key={'setup-' + roundId} client={client} project={project}
+        round={rounds.find((round) => round.id === roundId)} onSessionExpired={onSessionExpired} />}
       {roundId && <RoundComments key={roundId} client={client} roundId={roundId} onSessionExpired={onSessionExpired} />}
     </>
   );
@@ -32,6 +36,8 @@ export default function DeveloperWorkspace({ session, onLogout, onSessionExpired
   const client = useMemo(() => createDeveloperApi(session.accessToken), [session.accessToken]);
   const resource = useDeveloperResource(client, '/projects', onSessionExpired);
   const [projectId, setProjectId] = useState('');
+  const [adding, setAdding] = useState(false);
+  const [created, setCreated] = useState(null);
 
   return (
     <>
@@ -40,10 +46,18 @@ export default function DeveloperWorkspace({ session, onLogout, onSessionExpired
           <p className="dev-muted">{session.user.email}</p></div>
         <button onClick={onLogout}>Kijelentkezés</button>
       </header>
+      {!adding && <button className="dev-primary" disabled={!resource.data} onClick={() => setAdding(true)}>Új projekt hozzáadása</button>}
+      {adding && <NewProjectForm client={client} onSessionExpired={onSessionExpired} onCancel={() => setAdding(false)}
+        onCreated={(data) => {
+          resource.setData((current) => ({ ...current, projects: [data.project, ...current.projects] }));
+          setCreated(data);
+          setProjectId(data.project.id);
+          setAdding(false);
+        }} />}
       {resource.loading && <p role="status">Projektek betöltése…</p>}
       {resource.error && <div><p role="alert" className="dev-error">{resource.error}</p>
         <button onClick={resource.refresh}>Újrapróbálás</button></div>}
-      {resource.data?.projects.length === 0 && <p className="dev-card dev-muted">Még nincs elérhető projekted. A projekt és a review kör létrehozása egyelőre a meglévő API-val történik.</p>}
+      {resource.data?.projects.length === 0 && <p className="dev-card dev-muted">Még nincs projekted. Az „Új projekt hozzáadása” gombbal kapcsolhatod be az első weboldaladat.</p>}
       {resource.data?.projects.length > 0 && <section className="dev-project-picker">
         <label>Projekt
           <select value={projectId} onChange={(event) => setProjectId(event.target.value)}>
@@ -54,7 +68,9 @@ export default function DeveloperWorkspace({ session, onLogout, onSessionExpired
           </select>
         </label>
       </section>}
-      {projectId && <ProjectRounds key={projectId} client={client} projectId={projectId} onSessionExpired={onSessionExpired} />}
+      {projectId && <ProjectRounds key={projectId} client={client} projectId={projectId}
+        project={resource.data.projects.find((project) => project.id === projectId)}
+        initialRoundId={created?.project.id === projectId ? created.reviewRound.id : ''} onSessionExpired={onSessionExpired} />}
     </>
   );
 }

@@ -8,6 +8,7 @@
   },
   "main": "./src/index.js",
   "exports": {
-    ".": "./src/index.js"
+    ".": "./src/index.js",
+    "./reviewUrl": "./src/reviewUrl.js"
   }
 }

@@ -2,6 +2,7 @@ import crypto from 'crypto';
 
 import prisma from '../config/prisma.js';
 import { getReviewRoundById } from './reviewRoundService.js';
+import { isAllowedOrigin, parseTargetUrl } from '../utils/projectUrl.js';
 
 const generateToken = () => {
   return crypto.randomBytes(32).toString('hex');
@@ -24,6 +25,9 @@ export const createReviewLink = async ({
     reviewRoundId,
   });
 
+  const target = parseTargetUrl(reviewRound.targetUrl);
+  if (!isAllowedOrigin(target.origin, reviewRound.project, target.href)) throw new Error('TARGET_DOMAIN_NOT_ALLOWED');
+  parseTargetUrl(process.env.FRONTEND_URL);
   const token = generateToken();
   const tokenHash = hashToken(token);
 
@@ -135,6 +139,7 @@ export const deactivateReviewLink = async ({
 };
 
 export const getPublicReviewByToken = async (token) => {
+  if (typeof token !== 'string' || !/^[0-9a-f]{64}$/i.test(token)) throw new Error('REVIEW_LINK_NOT_FOUND');
   const tokenHash = hashToken(token);
 
   const reviewLink = await prisma.reviewLink.findUnique({
@@ -167,7 +172,7 @@ export const getPublicReviewByToken = async (token) => {
 
   if (
     reviewLink.expiresAt &&
-    reviewLink.expiresAt < new Date()
+    reviewLink.expiresAt <= new Date()
   ) {
     throw new Error('REVIEW_LINK_EXPIRED');
   }
