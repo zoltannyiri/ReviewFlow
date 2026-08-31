@@ -1,11 +1,18 @@
 import './App.css'
 
+import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import ReviewPage from './pages/ReviewPage'
+
 function App() {
 
   return (
-    <h1 class="text-2xl font-bold underline">
-      Hello world!
-    </h1>
+    <>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/r/:token" element={<ReviewPage />} />
+        </Routes>
+      </BrowserRouter>
+    </>
   )
 }
 

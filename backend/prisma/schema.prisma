@@ -91,11 +91,30 @@ model ReviewRound {
 
   status ReviewRoundStatus @default(DRAFT)
 
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  reviewLinks ReviewLink[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([projectId, version])
   @@index([projectId])
+}
+
+model ReviewLink {
+  id String @id @default(uuid())
+
+  reviewRoundId String
+
+  tokenHash String @unique
+
+  isActive  Boolean   @default(true)
+  expiresAt DateTime?
+
+  reviewRound ReviewRound @relation(fields: [reviewRoundId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([reviewRoundId])
 }
