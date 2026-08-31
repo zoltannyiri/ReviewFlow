@@ -67,6 +67,35 @@ model Project {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   createdBy    User         @relation("ProjectCreatedBy", fields: [createdById], references: [id])
 
+  reviewRounds ReviewRound[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+enum ReviewRoundStatus {
+  DRAFT
+  REVIEWING
+  APPROVED
+  CLOSED
+}
+
+model ReviewRound {
+  id String @id @default(uuid())
+
+  projectId String
+
+  name      String
+  targetUrl String
+  version   Int
+
+  status ReviewRoundStatus @default(DRAFT)
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([projectId, version])
+  @@index([projectId])
 }
