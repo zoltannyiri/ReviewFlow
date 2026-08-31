@@ -1,69 +1,104 @@
-import prisma from '../config/prisma.js';
-
-const refreshCookieOptions = {
-  httpOnly: true,
-  secure: process.env.NODE_ENV === 'production',
-  sameSite: 'strict',
-  maxAge: 7 * 24 * 60 * 60 * 1000,
-}
-
-const setRefreshCookie = (res, refreshToken) => {
-  res.cookie('refreshToken', refreshToken, refreshCookieOptions);
-}
+import {
+  registerUser,
+  loginUser,
+} from '../services/authService.js';
 
 export const register = async (req, res) => {
   try {
-    const result = await prisma.user.create({
-      data: {
-        email: req.body.email,
-        password: req.body.password,
-      },
+    const {
+      email,
+      password,
+      firstName,
+      lastName,
+      organizationName,
+    } = req.body;
+
+    if (!email || !password || !organizationName) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email, password and organizationName are required',
+      });
+    }
+
+    if (password.length < 8) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password must be at least 8 characters long',
+      });
+    }
+
+    const result = await registerUser({
+      email,
+      password,
+      firstName,
+      lastName,
+      organizationName,
+    });
+
+    return res.status(201).json({
+      success: true,
+      ...result,
     });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Internal Server Error' });
-  }
-}
+    if (error.message === 'EMAIL_ALREADY_EXISTS') {
+      return res.status(409).json({
+        success: false,
+        message: 'An account with this email already exists',
+      });
+    }
 
+    console.error('Register error:', error);
+
+    return res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+    });
+  }
+};
 
 export const login = async (req, res) => {
   try {
-    const user = await prisma.user.findUnique({
-      where: { email: req.body.email },
+    const {
+      email,
+      password,
+    } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email and password are required',
+      });
+    }
+
+    const result = await loginUser({
+      email,
+      password,
     });
-    if (!user) {
-      return res.status(401).json({ error: 'Invalid email or password' });
-    }
-    if (user.password !== req.body.password) {
-      return res.status(401).json({ error: 'Invalid email or password' });
-    }
+
+    return res.status(200).json({
+      success: true,
+      ...result,
+    });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Internal Server Error' });
+    if (error.message === 'INVALID_CREDENTIALS') {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid email or password',
+      });
+    }
+
+    console.error('Login error:', error);
+
+    return res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+    });
   }
-}
+};
 
 export const me = async (req, res) => {
-  try {
-    const user = await prisma.user.findUnique({
-      where: { id: req.user.id },
-    });
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-    res.json({ id: user.id, email: user.email });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Internal Server Error' });
-  }
-}
-
-export const logout = async (req, res) => {
-  try {
-    res.clearCookie('refreshToken', refreshCookieOptions);
-    res.json({ message: 'Logged out successfully' });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Internal Server Error' });
-  }
-}
+  return res.status(200).json({
+    success: true,
+    user: req.user,
+  });
+};
