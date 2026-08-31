@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="hu">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ReviewFlow SDK – helyi teszt</title>
+    <style>
+      body { font: 16px/1.5 Arial, sans-serif; margin: 0; color: #172033; background: #f8fafc; }
+      main { max-width: 1080px; margin: auto; padding: 100px 32px 900px; }
+      h1 { max-width: 600px; font-size: 36px; line-height: 1.2; }
+      section { margin: 40px 0; }
+      /* Deliberately hostile host styles must not affect the SDK shadow UI. */
+      button { background: #fca5a5 !important; color: #7f1d1d !important; border: 4px dotted red !important; font: 18px serif !important; padding: 12px !important; }
+      textarea { background: yellow !important; font: 28px serif !important; }
+      #controls { padding: 16px; background: #e2e8f0; border-radius: 12px; }
+      #controls button { margin: 4px; font: 14px Arial !important; padding: 6px !important; }
+      #checks { padding: 20px 32px; background: #fff; }
+      #checks li { margin: 4px 0; }
+      #checks [data-result="pass"] { color: #166534; }
+      #checks [data-result="fail"] { color: #b91c1c; }
+      #fallback { position: absolute; top: 650px; left: 40px; width: 200px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1 data-review-id="hero-title">Modern weboldal vállalkozásoknak</h1>
+      <p>Valós SDK, helyi memóriában szimulált API. Nem ír az adatbázisba.</p>
+      <section><button id="hero-cta">Ajánlatot kérek</button></section>
+      <section id="controls" data-reviewflow-ui="true">
+        <strong>Tesztvezérlők (a kijelölő figyelmen kívül hagyja)</strong><br>
+        <button id="move-target">Cím áthelyezése</button>
+        <button id="replace-target">Cím DOM-cseréje</button>
+        <button id="reinit">SDK újrainicializálása</button>
+        <button id="destroy">SDK leállítása</button><br>
+        <label><input type="checkbox" id="fail-save"> Mentési hiba szimulálása</label><br>
+        <label><input type="checkbox" id="fail-load"> Betöltési hiba szimulálása</label>
+      </section>
+      <p id="fallback">Azonosító nélküli elem (mentett koordinátás pin)</p>
+    </main>
+    <section id="checks" data-reviewflow-ui="true">
+      <h2>Automatikus böngészőtesztek</h2>
+      <p id="summary">Futnak…</p>
+      <ol id="results"></ol>
+    </section>
+    <script type="module" src="./browser.js"></script>
+  </body>
+</html>

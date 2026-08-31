@@ -13,8 +13,6 @@ const ReviewPage = () => {
   useEffect(() => {
     const loadReview = async () => {
       try {
-        console.log('TOKEN:', token);
-console.log('TOKEN LENGTH:', token?.length);
         const response = await api.get(`/review/${token}`);
 
         setReview(response.data.review);

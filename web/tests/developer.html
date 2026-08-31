@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="hu">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ReviewFlow – fejlesztői felület teszt</title>
+  </head>
+  <body>
+    <aside style="padding:12px 24px;background:#fff7ed;font:14px Arial,sans-serif">
+      <strong>Helyi UI-teszt, szimulált API – nem ír az adatbázisba.</strong>
+      <p>Belépés: developer@example.invalid / fixture-password</p>
+      <label><input type="checkbox" id="fail-save"> Mentési hiba</label>
+      <label><input type="checkbox" id="fail-load"> Betöltési hiba</label>
+      <label><input type="checkbox" id="expired-session"> Lejárt munkamenet</label>
+      <p id="request-result" role="status">Még nem történt mentés.</p>
+    </aside>
+    <div id="root"></div>
+    <script type="module" src="./developer.jsx"></script>
+  </body>
+</html>

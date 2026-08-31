@@ -1,13 +1,13 @@
 {
-  "name": "client",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "name": "@reviewflow/client",
+  "version": "0.0.1",
+  "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --test tests/*.test.js",
+    "test:browser": "node ../../web/node_modules/vite/bin/vite.js . --host 127.0.0.1 --port 5174 --strictPort"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs"
+  "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  }
 }

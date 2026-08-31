@@ -98,6 +98,14 @@ export const deactivateReviewLink = async ({
         },
       },
     },
+    select: {
+      id: true,
+      reviewRoundId: true,
+      isActive: true,
+      expiresAt: true,
+      createdAt: true,
+      updatedAt: true,
+    },
   });
 
   if (!reviewLink) {

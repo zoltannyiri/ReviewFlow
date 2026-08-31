@@ -12,6 +12,16 @@ enum OrganizationRole {
   MEMBER
 }
 
+enum CommentStatus {
+  OPEN
+  RESOLVED
+}
+
+enum CommentReplyAuthorType {
+  DEVELOPER
+  CLIENT
+}
+
 model User {
   id           String  @id @default(uuid())
   email        String  @unique
@@ -21,6 +31,7 @@ model User {
 
   memberships     OrganizationMember[]
   projectsCreated Project[]            @relation("ProjectCreatedBy")
+  commentReplies  CommentReply[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -93,6 +104,7 @@ model ReviewRound {
 
   project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
   reviewLinks ReviewLink[]
+  comments    Comment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -110,6 +122,9 @@ model ReviewLink {
 
   isActive  Boolean   @default(true)
   expiresAt DateTime?
+  comments  Comment[]
+
+  replies CommentReply[]
 
   reviewRound ReviewRound @relation(fields: [reviewRoundId], references: [id], onDelete: Cascade)
 
@@ -117,4 +132,58 @@ model ReviewLink {
   updatedAt DateTime @updatedAt
 
   @@index([reviewRoundId])
+}
+
+model Comment {
+  id String @id @default(uuid())
+
+  reviewRoundId String
+  reviewLinkId  String?
+
+  comment String
+
+  pathname        String
+  tagName         String
+  reviewElementId String?
+  elementId       String?
+  elementText     String?
+
+  viewportWidth  Int
+  viewportHeight Int
+
+  elementX      Float
+  elementY      Float
+  elementWidth  Float
+  elementHeight Float
+
+  status CommentStatus @default(OPEN)
+
+  reviewRound ReviewRound @relation(fields: [reviewRoundId], references: [id], onDelete: Cascade)
+  reviewLink  ReviewLink? @relation(fields: [reviewLinkId], references: [id], onDelete: SetNull)
+  replies     CommentReply[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([reviewRoundId])
+  @@index([reviewLinkId])
+}
+
+model CommentReply {
+  id           String                 @id @default(uuid())
+  commentId    String
+  authorType   CommentReplyAuthorType
+  authorName   String                 @db.VarChar(160)
+  authorId     String?
+  reviewLinkId String?
+  message      String                 @db.VarChar(5000)
+  createdAt    DateTime               @default(now())
+
+  comment    Comment     @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  author     User?       @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  reviewLink ReviewLink? @relation(fields: [reviewLinkId], references: [id], onDelete: SetNull)
+
+  @@index([commentId, createdAt, id])
+  @@index([authorId])
+  @@index([reviewLinkId])
 }
