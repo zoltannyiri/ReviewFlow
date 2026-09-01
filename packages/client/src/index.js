@@ -1,23 +1,44 @@
 import { createElementPicker } from './elementPicker.js';
 import { createCommentBox } from './commentBox.js';
-import { createComment, getComments, createReply } from './api.js';
+import { connectReview, createComment, getComments, createReply } from './api.js';
 import { createCommentPins } from './commentPins.js';
 import { createCommentPanel } from './commentPanel.js';
 import { groupComments } from './commentGroups.js';
+import { observePathname } from './navigation.js';
+import {
+  clearReviewSession, getReviewSessionStorageKey, isRejectedReviewSession,
+  readReviewSession, removeReviewSessionFromUrl, storeReviewSession,
+} from './reviewSession.js';
+import { createReviewToolbar, REVIEW_MODES } from './toolbar.js';
 import { createUiRoot } from './uiRoot.js';
 
 let activeReview = null;
 
 const ReviewFlow = {
   init({ apiUrl = 'http://localhost:5000/api', projectKey } = {}) {
-    const sessionToken = new URLSearchParams(
-      window.location.search
-    ).get('rf_session');
-
-    if (!sessionToken) return;
+    const storageKey = getReviewSessionStorageKey({ apiUrl, projectKey });
+    const reviewSession = readReviewSession({ storageKey });
+    if (!reviewSession) return;
 
     activeReview?.destroy();
+    const sessionToken = reviewSession.token;
     const ui = createUiRoot();
+    let destroyed = false;
+    let loadVersion = 0;
+    let loadController = null;
+    let comments = [];
+    let ready = false;
+    let connected = false;
+    let validated = false;
+
+    const renderComments = () => {
+      const groups = groupComments(comments.filter(
+        (comment) => comment.pathname === window.location.pathname
+      ));
+      commentPins.render(groups);
+      panel.update(groups);
+    };
+
     const panel = createCommentPanel({
       root: ui.root,
       async onReply({ commentId, message, signal }) {
@@ -31,28 +52,6 @@ const ReviewFlow = {
         void loadComments();
       },
     });
-    let destroyed = false;
-    let loadVersion = 0;
-    let comments = [];
-    let ready = false;
-    let connected = false;
-    const connectionController = new AbortController();
-
-    const toolbar = document.createElement('div');
-    toolbar.setAttribute('data-reviewflow-ui', 'true');
-    const toolbarLabel = '💬 ReviewFlow – Review mód';
-    toolbar.textContent = toolbarLabel;
-    Object.assign(toolbar.style, {
-      position: 'fixed', top: '16px', left: '50%',
-      transform: 'translateX(-50%)', zIndex: '1',
-      background: '#111827', color: '#ffffff',
-      padding: '10px 16px', borderRadius: '10px',
-      maxWidth: 'calc(100% - 32px)',
-      fontFamily: 'Arial, sans-serif', fontSize: '14px',
-      boxShadow: '0 4px 20px rgba(0,0,0,.25)',
-    });
-    ui.root.appendChild(toolbar);
-
     const commentPins = createCommentPins({
       root: ui.root,
       onSelect(group, pin) {
@@ -60,49 +59,27 @@ const ReviewFlow = {
         panel.open(group, pin);
       },
     });
-
-    const renderComments = () => {
-      const groups = groupComments(comments.filter(
-        (comment) => comment.pathname === window.location.pathname
-      ));
-      commentPins.render(groups);
-      panel.update(groups);
-    };
-
-    const loadComments = async () => {
-      const version = ++loadVersion;
-      const pathname = window.location.pathname;
-      try {
-        if (projectKey && !connected) {
-          const response = await fetch(apiUrl + '/review/' + encodeURIComponent(sessionToken) + '/connection', {
-            method: 'POST', signal: connectionController.signal,
-            headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectKey }),
-          });
-          if (!response.ok) throw new Error('SDK connection rejected');
-          connected = true;
-        }
-        const loaded = await getComments({ apiUrl, sessionToken, pathname });
-        if (destroyed || version !== loadVersion ||
-            pathname !== window.location.pathname) return;
-
-        comments = loaded;
-        ready = true;
-        renderComments();
-        toolbar.textContent = toolbarLabel;
-      } catch {
-        if (destroyed || version !== loadVersion) return;
-        toolbar.textContent = 'ReviewFlow – A megjegyzések nem tölthetők be.';
-      }
-    };
+    const picker = createElementPicker({
+      enabled: false,
+      onSelect(element) {
+        if (!ready) return;
+        panel.close({ restoreFocus: false });
+        commentBox.open(element);
+      },
+    });
+    const toolbar = createReviewToolbar({
+      root: ui.root,
+      onModeChange(mode) {
+        picker.setEnabled(mode === REVIEW_MODES.COMMENTING);
+        if (mode === REVIEW_MODES.BROWSING) commentBox.close();
+      },
+    });
 
     const commentBox = createCommentBox({
       root: ui.root,
       async onSubmit(payload) {
-        // Let the composer display failures and retain the draft for retry.
         const saved = await createComment({ apiUrl, sessionToken, payload });
         if (destroyed) return;
-
-        // Update immediately, even if reloading the list subsequently fails.
         ++loadVersion;
         comments = [...comments.filter(({ id }) => id !== saved.id), saved];
         renderComments();
@@ -110,26 +87,74 @@ const ReviewFlow = {
       },
     });
 
-    const picker = createElementPicker({
-      onSelect(element) {
-        if (!ready) return;
+    let session;
+    const invalidate = () => {
+      clearReviewSession({ token: sessionToken, storageKey });
+      session.destroy();
+    };
+    const loadComments = async () => {
+      const version = ++loadVersion;
+      const pathname = window.location.pathname;
+      loadController?.abort();
+      loadController = new AbortController();
+      ready = false;
+      toolbar.setStatus('💬 ReviewFlow – Betöltés…');
+      try {
+        if (projectKey && !connected) {
+          await connectReview({ apiUrl, sessionToken, projectKey, signal: loadController.signal });
+          connected = true;
+        }
+        const loaded = await getComments({
+          apiUrl, sessionToken, pathname, signal: loadController.signal,
+        });
+        if (destroyed || version !== loadVersion || pathname !== window.location.pathname) return;
+
+        comments = loaded;
+        ready = true;
+        renderComments();
+        toolbar.setStatus('');
+        if (!validated) {
+          validated = true;
+          storeReviewSession({ token: sessionToken, storageKey });
+          if (reviewSession.source === 'url') removeReviewSessionFromUrl({});
+        }
+      } catch (error) {
+        if (destroyed || error.name === 'AbortError' || version !== loadVersion) return;
+        if (isRejectedReviewSession(error)) {
+          invalidate();
+          return;
+        }
+        toolbar.setStatus('ReviewFlow – A megjegyzések nem tölthetők be.');
+      }
+    };
+
+    const navigation = observePathname({
+      onChange() {
+        if (destroyed) return;
+        ready = false;
+        comments = [];
+        picker.reset();
+        commentBox.close();
         panel.close({ restoreFocus: false });
-        commentBox.open(element);
+        commentPins.clear();
+        void loadComments();
       },
     });
 
-    const session = {
+    session = {
       destroy() {
         if (destroyed) return;
         destroyed = true;
-        connectionController.abort();
+        loadController?.abort();
         ++loadVersion;
+        navigation.destroy();
         picker.destroy();
         commentBox.destroy();
         commentPins.destroy();
         panel.destroy();
+        toolbar.destroy();
         ui.destroy();
-        activeReview = null;
+        if (activeReview === session) activeReview = null;
       },
     };
     activeReview = session;

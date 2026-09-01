@@ -2,6 +2,7 @@ import express from 'express';
 
 import {
   create,
+  createPreview,
   list,
   deactivate,
   publicReview,
@@ -19,6 +20,7 @@ import { connectSdk } from '../controllers/projectSetupController.js';
 const router = express.Router();
 
 router.post( '/rounds/:id/links', requireAuth, create );
+router.post('/rounds/:id/preview', requireAuth, createPreview);
 
 router.get( '/rounds/:id/links', requireAuth, list );
 

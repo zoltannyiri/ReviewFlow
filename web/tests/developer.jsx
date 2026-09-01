@@ -21,6 +21,16 @@ const fixtureProjects = [
     publicKey: 'fixture-empty-key', allowedDomains: ['http://localhost:5173'] },
 ];
 const fixtureLinks = new Map();
+window.open = () => ({
+  closed: false,
+  opener: window,
+  close() {},
+  location: {
+    replace(href) {
+      document.getElementById('request-result').textContent = `Review mód megnyitva: ${href}`;
+    },
+  },
+});
 let comments = [
   { id: '33333333-3333-4333-8333-333333333331', elementText: 'Főcím', comment: 'Legyen nagyobb a főcím.', pathname: '/test', status: 'OPEN' },
   { id: '33333333-3333-4333-8333-333333333332', elementText: 'Ajánlatkérés', comment: '<img src=x onerror=alert(1)> Ez csak szöveg.', pathname: '/contact', status: 'OPEN' },
@@ -68,6 +78,14 @@ api.defaults.adapter = async (config) => {
     return respond(201, { project, reviewRound });
   }
   if (config.url.endsWith('/connection')) return respond(200, { lastConnectedAt: null, origin: null });
+  if (config.method === 'post' && /^\/rounds\/[^/]+\/preview$/.test(config.url)) {
+    if (document.getElementById('fail-save').checked) return respond(500, { message: 'Simulated save error' });
+    return respond(201, { preview: {
+      id: crypto.randomUUID(), token: 'a'.repeat(64),
+      targetUrl: 'https://kovacs-klima.vercel.app/tours?lang=hu#details',
+      expiresAt: new Date(Date.now() + 3600000).toISOString(), createdAt: new Date().toISOString(),
+    } });
+  }
   if (/^\/rounds\/[^/]+\/links$/.test(config.url)) {
     const id = config.url.split('/')[2];
     const saved = fixtureLinks.get(id) || [];

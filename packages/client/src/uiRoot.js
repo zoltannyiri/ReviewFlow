@@ -29,6 +29,7 @@ export const createUiRoot = () => {
       outline-offset: 3px;
     }
     [data-reviewflow-ui] { pointer-events: auto; }
+    .rf-comment-pin:hover { filter: brightness(1.08); box-shadow: 0 5px 16px rgba(37, 99, 235, .48) !important; }
     .rf-thread { margin-top: 16px; padding-top: 12px; border-top: 1px dashed #cbd5e1; }
     .rf-thread h3 { margin: 0 0 10px; font-size: 12px; color: #475569; }
     .rf-thread ol { list-style: none; margin: 0; padding: 0; }

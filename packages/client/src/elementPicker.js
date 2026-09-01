@@ -2,6 +2,7 @@ const IGNORE_ATTRIBUTE = 'data-reviewflow-ui';
 
 export const createElementPicker = ({
   onSelect,
+  enabled = true,
 }) => {
   const highlight = document.createElement('div');
 
@@ -23,6 +24,7 @@ export const createElementPicker = ({
   document.body.appendChild(highlight);
 
   let currentElement = null;
+  let pickerEnabled = enabled;
 
   const isReviewFlowElement = (element) => {
     return Boolean(
@@ -33,6 +35,7 @@ export const createElementPicker = ({
   };
 
   const handlePointerMove = (event) => {
+    if (!pickerEnabled) return;
     const element = document.elementFromPoint(
       event.clientX,
       event.clientY
@@ -65,6 +68,7 @@ export const createElementPicker = ({
 
   const handleClick = (event) => {
     if (
+      !pickerEnabled ||
       !currentElement ||
       event.composedPath().some(isReviewFlowElement)
     ) {
@@ -136,6 +140,17 @@ export const createElementPicker = ({
   );
 
   return {
+    setEnabled(nextEnabled) {
+      pickerEnabled = Boolean(nextEnabled);
+      if (!pickerEnabled) {
+        highlight.style.display = 'none';
+        currentElement = null;
+      }
+    },
+    reset() {
+      highlight.style.display = 'none';
+      currentElement = null;
+    },
     destroy() {
       document.removeEventListener(
         'pointermove',

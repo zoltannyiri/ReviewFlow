@@ -2,6 +2,7 @@ import { useState } from 'react';
 import api from '../api/api.js';
 import { useDeveloperResource } from '../hooks/useDeveloperResource.js';
 import { useDeveloperAction } from '../hooks/useDeveloperAction.js';
+import { buildReviewTarget } from '@reviewflow/client/reviewUrl';
 
 function CopyText({ label, value, multiline = false }) {
   const [notice, setNotice] = useState('');
@@ -19,7 +20,9 @@ export default function ProjectSetup({ client, project, round, onSessionExpired 
   const links = useDeveloperResource(client, '/rounds/' + round.id + '/links', onSessionExpired);
   const connection = useDeveloperResource(client, '/rounds/' + round.id + '/connection', onSessionExpired);
   const action = useDeveloperAction(onSessionExpired);
+  const previewAction = useDeveloperAction(onSessionExpired);
   const [issued, setIssued] = useState(null);
+  const [previewHref, setPreviewHref] = useState('');
   const [days, setDays] = useState('7');
   const apiUrl = new URL(api.defaults.baseURL || '/api', window.location.origin);
   const moduleUrl = new URL('/sdk/index.js', apiUrl.origin).href;
@@ -37,6 +40,28 @@ export default function ProjectSetup({ client, project, round, onSessionExpired 
     <p className="dev-eyebrow">Bekötés és megosztás</p>
     <h2 id="setup-title">Indulhat az ügyfél review</h2>
     <p className="dev-url">Céloldal: {round.targetUrl || 'Nincs beállítva'}</p>
+    <div className="dev-preview-action">
+      <button className="dev-primary" disabled={previewAction.busy} onClick={() => {
+        const opened = window.open('about:blank', '_blank');
+        if (opened) opened.opener = null;
+        previewAction.run(
+          (signal) => client.post('/rounds/' + round.id + '/preview', {}, { signal }),
+          ({ preview }) => {
+            const href = buildReviewTarget(preview.targetUrl, preview.token);
+            setPreviewHref(href);
+            links.setData((current) => current ? ({ ...current, reviewLinks: [{
+              id: preview.id, reviewRoundId: round.id, isActive: true,
+              expiresAt: preview.expiresAt, createdAt: preview.createdAt,
+            }, ...current.reviewLinks] }) : current);
+            if (opened && !opened.closed) opened.location.replace(href);
+            else window.open(href, '_blank', 'noopener,noreferrer');
+          },
+        ).then((data) => { if (!data && opened && !opened.closed) opened.close(); });
+      }}>{previewAction.busy ? 'Megnyitás…' : 'Megnyitás review módban'}</button>
+      <span className="dev-small dev-muted">Új, egy órán át érvényes ideiglenes review-sessionnel.</span>
+    </div>
+    {previewAction.error && <p role="alert" className="dev-error">{previewAction.error}</p>}
+    {previewHref && <p className="dev-small">Ha az új lapot blokkolta a böngésző, <a href={previewHref} target="_blank" rel="noopener noreferrer">nyisd meg innen</a>.</p>}
     {localOnly && <p role="status" className="dev-warning">Jelenleg helyi konfigurációt használsz. Külső ügyfelekhez publikus HTTPS ReviewFlow frontend és API kell; a localhost cím az ügyfél saját gépére mutat.</p>}
     <details open>
       <summary>1. SDK beépítése a céloldalba</summary>

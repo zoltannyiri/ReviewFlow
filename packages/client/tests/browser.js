@@ -4,8 +4,11 @@ import { createCommentPanel } from '../src/commentPanel.js';
 import { createCommentPins } from '../src/commentPins.js';
 import { groupComments } from '../src/commentGroups.js';
 import { runReplyBrowserChecks } from './reply-browser.js';
+import { getReviewSessionStorageKey } from '../src/reviewSession.js';
 
 const pathname = window.location.pathname;
+const nativePushState = history.pushState;
+const nativeReplaceState = history.replaceState;
 const seed = (id, overrides = {}) => ({
   id, pathname, tagName: 'h1', reviewElementId: 'hero-title', elementId: null,
   elementText: 'Modern weboldal vállalkozásoknak', comment: `Megjegyzés ${id}`,
@@ -32,10 +35,15 @@ const nativeFetch = window.fetch;
 let postCount = 0;
 let replyCount = 0;
 let connectionCount = 0;
+const requestedPathnames = [];
 window.fetch = async (input, options = {}) => {
   const url = new URL(input, window.location.origin);
   if (!url.pathname.startsWith('/__reviewflow_test_api/')) {
     return nativeFetch(input, options);
+  }
+  const requestToken = url.pathname.split('/review/')[1]?.split('/')[0];
+  if (requestToken === 'invalid-stored-token') {
+    return Response.json({ message: 'Expired fixture session' }, { status: 410 });
   }
   if (options.method === 'POST' && url.pathname.endsWith('/connection')) {
     ++connectionCount;
@@ -69,6 +77,7 @@ window.fetch = async (input, options = {}) => {
   if (document.getElementById('fail-load').checked) {
     return Response.json({ message: 'Simulated load failure' }, { status: 500 });
   }
+  requestedPathnames.push(url.searchParams.get('pathname'));
   return Response.json({
     comments: savedComments.filter((comment) => comment.pathname === url.searchParams.get('pathname')),
   });
@@ -194,6 +203,8 @@ panel.destroy();
 ui.destroy();
 
 const apiUrl = `${window.location.origin}/__reviewflow_test_api`;
+const legacyStorageKey = getReviewSessionStorageKey({ apiUrl });
+sessionStorage.removeItem(legacyStorageKey);
 const initialUrl = new URL(window.location.href);
 const noSessionUrl = new URL(initialUrl);
 noSessionUrl.searchParams.delete('rf_session');
@@ -202,10 +213,28 @@ await test('Token nélkül az SDK nem hoz létre saját UI-t', () => {
   assert(ReviewFlow.init({ apiUrl }) === undefined, 'Unexpected session');
   assert(![...document.body.children].some((element) => element.shadowRoot), 'Unexpected UI');
 });
+await test('Érvénytelen tárolt token törlődik és nem hagy aktív review UI-t', async () => {
+  sessionStorage.setItem(legacyStorageKey, 'invalid-stored-token');
+  ReviewFlow.init({ apiUrl });
+  await settle();
+  assert(sessionStorage.getItem(legacyStorageKey) === null, 'Stored token was retained');
+  assert(![...document.body.children].some((element) => element.shadowRoot), 'Invalid session UI remained');
+});
 initialUrl.searchParams.set('rf_session', 'local-fixture-not-a-real-review-token');
 history.replaceState(null, '', initialUrl);
 let session = ReviewFlow.init({ apiUrl });
 await settle();
+await test('A validált URL-token sessionStorage-ba kerül és eltűnik a látható URL-ből', () => {
+  assert(sessionStorage.getItem(legacyStorageKey) === 'local-fixture-not-a-real-review-token', 'Token not stored');
+  assert(!new URL(location.href).searchParams.has('rf_session'), 'Token stayed in URL');
+  assert(new URL(location.href).hash === initialUrl.hash, 'Hash changed');
+});
+await test('Az eltárolt session URL-token nélkül, teljes újratöltési modellben visszaáll', async () => {
+  session.destroy();
+  session = ReviewFlow.init({ apiUrl });
+  await settle();
+  assert(session && [...document.body.children].filter((element) => element.shadowRoot).length === 1, 'Stored session not restored');
+});
 await test('Újrainicializáláskor csak egy SDK-példány marad', async () => {
   session = ReviewFlow.init({ apiUrl });
   await settle();
@@ -213,12 +242,33 @@ await test('Újrainicializáláskor csak egy SDK-példány marad', async () => {
 });
 
 const sdkRoot = () => [...document.body.children].find((element) => element.shadowRoot)?.shadowRoot;
+const modeButton = (name) => [...sdkRoot().querySelectorAll('button')].find((button) => button.textContent === name);
 const selectHeading = () => {
   const heading = document.querySelector('h1');
   const rect = heading.getBoundingClientRect();
   document.dispatchEvent(new PointerEvent('pointermove', { clientX: rect.left + 10, clientY: rect.top + 10 }));
   heading.dispatchEvent(new MouseEvent('click', { bubbles: true, composed: true }));
 };
+await test('Böngészés módban a weboldal kattintásait nem fogja meg a picker', () => {
+  const heading = document.querySelector('h1');
+  const rect = heading.getBoundingClientRect();
+  document.dispatchEvent(new PointerEvent('pointermove', { clientX: rect.left + 10, clientY: rect.top + 10 }));
+  const click = new MouseEvent('click', { bubbles: true, cancelable: true, composed: true });
+  heading.dispatchEvent(click);
+  assert(!click.defaultPrevented, 'Browsing click was intercepted');
+  assert(modeButton('Böngészés').getAttribute('aria-pressed') === 'true', 'Browsing mode not active');
+});
+await test('Kommentelés módban a célkijelölés megfogja a normál kattintást', () => {
+  modeButton('Kommentelés').click();
+  const heading = document.querySelector('h1');
+  const rect = heading.getBoundingClientRect();
+  document.dispatchEvent(new PointerEvent('pointermove', { clientX: rect.left + 10, clientY: rect.top + 10 }));
+  const click = new MouseEvent('click', { bubbles: true, cancelable: true, composed: true });
+  heading.dispatchEvent(click);
+  assert(click.defaultPrevented, 'Comment click was not intercepted');
+  assert(sdkRoot().querySelector('[aria-label="Megjegyzés szövege"]').parentElement.style.display === 'block', 'Composer did not open');
+  sdkRoot().querySelector('[aria-label="Megjegyzés szövege"]').parentElement.querySelector('button').click();
+});
 await test('Sikertelen mentéskor a vázlat megmarad, a hiba inline jelenik meg', async () => {
   selectHeading();
   const root = sdkRoot();
@@ -267,9 +317,15 @@ await test('Sikeres POST után hibás újratöltés sem veszíti el a mentett ko
   assert(root.querySelector('[aria-label="Megjegyzés szövege"]').parentElement.style.display === 'none', 'Unnecessary retry');
   document.getElementById('fail-load').checked = false;
 });
-await test('Leállítás után eltűnik a UI, új init után visszatölthető', async () => {
+await test('Leállítás eltávolítja a UI-t és a SPA navigációs listenereket', async () => {
+  const before = requestedPathnames.length;
   session.destroy();
   assert(!sdkRoot(), 'Leaked root');
+  assert(history.pushState === nativePushState && history.replaceState === nativeReplaceState, 'History wrappers leaked');
+  history.pushState(null, '', '/after-destroy');
+  await settle();
+  assert(requestedPathnames.length === before, 'Destroyed SDK reloaded comments');
+  nativeReplaceState.call(history, null, '', pathname);
   session = ReviewFlow.init({ apiUrl });
   await settle();
   assert(sdkRoot().querySelector('[aria-haspopup="dialog"]').textContent === '5', 'Reloaded count');
@@ -280,7 +336,41 @@ await runReplyBrowserChecks({
   reinitialize: () => { session = ReviewFlow.init({ apiUrl }); },
 });
 
+await test('SPA pushState újratölti az új pathname kommentjeit és törli a régi pineket', async () => {
+  history.pushState(null, '', '/other?view=list');
+  await settle();
+  assert(requestedPathnames.at(-1) === '/other', 'pushState pathname was not requested');
+  assert(sdkRoot().querySelectorAll('[aria-haspopup="dialog"]').length === 1, 'Previous pathname pins remained');
+  assert(sdkRoot().querySelector('[aria-haspopup="dialog"]').textContent === '1', 'New pathname comments missing');
+});
+await test('Navigáció után létrehozott komment az aktuális pathname-et használja', async () => {
+  modeButton('Kommentelés').click();
+  selectHeading();
+  const root = sdkRoot();
+  root.querySelector('[aria-label="Megjegyzés szövege"]').value = 'Másik oldali megjegyzés';
+  [...root.querySelectorAll('button')].find((button) => button.textContent === 'Mentés').click();
+  await settle();
+  assert(savedComments.at(-1).pathname === '/other', 'Comment used the entry pathname');
+});
+await test('SPA replaceState útvonalváltása is újratölti a kommenteket', async () => {
+  history.replaceState(null, '', '/replace-page#section');
+  await settle();
+  assert(requestedPathnames.at(-1) === '/replace-page', 'replaceState pathname was not requested');
+  assert(sdkRoot().querySelectorAll('[aria-haspopup="dialog"]').length === 0, 'Stale pins after replaceState');
+});
+await test('popstate útvonalváltása is újratölti a kommenteket', async () => {
+  nativeReplaceState.call(history, null, '', '/popstate-page');
+  window.dispatchEvent(new PopStateEvent('popstate'));
+  await settle();
+  assert(requestedPathnames.at(-1) === '/popstate-page', 'popstate pathname was not requested');
+  history.replaceState(null, '', pathname);
+  await settle();
+});
+
 await test('Projektkulccsal az SDK ellenőrzi a bekötést és betölti a kommenteket', async () => {
+  const url = new URL(location.href);
+  url.searchParams.set('rf_session', 'local-fixture-not-a-real-review-token');
+  history.replaceState(null, '', url);
   const before = connectionCount;
   session = ReviewFlow.init({ apiUrl, projectKey: 'fixture-project-key' });
   await settle();
@@ -288,15 +378,16 @@ await test('Projektkulccsal az SDK ellenőrzi a bekötést és betölti a kommen
   assert(sdkRoot().querySelector('[aria-haspopup="dialog"]'), 'Comments did not load');
 });
 await test('Hibás projektkulccsal nem jelennek meg kommentek és nem indítható kijelölés', async () => {
+  const url = new URL(location.href);
+  url.searchParams.set('rf_session', 'local-fixture-not-a-real-review-token');
+  history.replaceState(null, '', url);
   session = ReviewFlow.init({ apiUrl, projectKey: 'wrong-key' });
   await settle();
-  assert(!sdkRoot().querySelector('[aria-haspopup="dialog"]'), 'Wrong project was loaded');
-  selectHeading();
-  assert(sdkRoot().querySelector('[aria-label="Megjegyzés szövege"]').parentElement.style.display === 'none', 'Unauthorized picker');
+  assert(!sdkRoot(), 'Wrong project left an active UI');
 });
 await test('Projektkulcs önmagában nem aktivál review módot vagy kapcsolatjelzést', () => {
-  session.destroy();
   history.replaceState(null, '', noSessionUrl);
+  sessionStorage.removeItem(getReviewSessionStorageKey({ apiUrl, projectKey: 'fixture-project-key' }));
   const before = connectionCount;
   assert(ReviewFlow.init({ apiUrl, projectKey: 'fixture-project-key' }) === undefined, 'Unexpected session');
   assert(connectionCount === before && !sdkRoot(), 'Unexpected connection');

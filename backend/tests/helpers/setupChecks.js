@@ -88,6 +88,21 @@ export const runSetupChecks = async (t, { tx, request, org, ownerToken, memberTo
     assert.equal(read.status, 200);
     assert.equal(read.body.review.reviewRound.targetUrl, input.targetUrl);
   });
+  await t.test('developer preview creates an authenticated one-hour session without exposing stored secrets', async () => {
+    assert.equal((await request('/rounds/' + round.id + '/preview', { method: 'POST', body: {} })).status, 401);
+    assert.equal((await request('/rounds/' + round.id + '/preview', { token: outsiderToken, method: 'POST', body: {} })).status, 404);
+    assert.equal((await request('/rounds/' + round.id + '/preview', { token: ownerToken, method: 'POST', body: { expiresAt: null } })).status, 400);
+    const before = Date.now();
+    const result = await request('/rounds/' + round.id + '/preview', { token: ownerToken, method: 'POST', body: {} });
+    assert.equal(result.status, 201);
+    assert.match(result.body.preview.token, /^[0-9a-f]{64}$/);
+    assert.equal(result.body.preview.targetUrl, input.targetUrl);
+    const lifetime = new Date(result.body.preview.expiresAt).getTime() - before;
+    assert.ok(lifetime >= 59 * 60 * 1000 && lifetime <= 61 * 60 * 1000);
+    const stored = await tx.reviewLink.findUnique({ where: { id: result.body.preview.id } });
+    assert.notEqual(stored.tokenHash, result.body.preview.token);
+    assert.ok(!JSON.stringify(stored).includes(result.body.preview.token));
+  });
   await t.test('cross-origin SDK requests and preflights accept only the configured project origin', async () => {
     const path = '/review/' + link.token + '/comments';
     const preflight = await request(path, { method: 'OPTIONS', origin, headers: { 'Access-Control-Request-Method': 'POST', 'Access-Control-Request-Headers': 'content-type' } });

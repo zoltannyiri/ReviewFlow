@@ -13,7 +13,10 @@ export const useDeveloperAction = (onSessionExpired) => {
     setError('');
     try {
       const { data } = await request(controller.signal);
-      if (!controller.signal.aborted) onSuccess(data);
+      if (!controller.signal.aborted) {
+        onSuccess?.(data);
+        return data;
+      }
     } catch (failure) {
       if (controller.signal.aborted) return;
       const status = failure.response?.status;

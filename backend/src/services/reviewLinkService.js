@@ -50,6 +50,7 @@ export const createReviewLink = async ({
     ...reviewLink,
 
     token,
+    targetUrl: target.href,
 
     reviewUrl: new URL('/r/' + token, frontend.origin).href,
   };

@@ -150,3 +150,35 @@ export const publicReview = async (req, res) => {
     });
   }
 };
+
+export const createPreview = async (req, res) => {
+  try {
+    if (req.body && (Array.isArray(req.body) || Object.keys(req.body).length > 0)) {
+      return res.status(400).json({ success: false, message: 'Preview options are not supported' });
+    }
+    const reviewLink = await createReviewLink({
+      userId: req.user.id,
+      reviewRoundId: req.params.id,
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+    });
+    return res.status(201).json({
+      success: true,
+      preview: {
+        id: reviewLink.id,
+        token: reviewLink.token,
+        targetUrl: reviewLink.targetUrl,
+        expiresAt: reviewLink.expiresAt,
+        createdAt: reviewLink.createdAt,
+      },
+    });
+  } catch (error) {
+    if (['INVALID_TARGET_URL', 'TARGET_DOMAIN_NOT_ALLOWED'].includes(error.message)) {
+      return res.status(400).json({ success: false, message: 'Check the review target domain' });
+    }
+    if (error.message === 'REVIEW_ROUND_NOT_FOUND') {
+      return res.status(404).json({ success: false, message: 'Review round not found' });
+    }
+    console.error('Create developer preview error:', error);
+    return res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+};

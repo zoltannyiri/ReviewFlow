@@ -61,6 +61,7 @@
 .dev-link-button { display: inline-block; padding: 10px 16px; border-radius: 8px; background: #2563eb; color: #fff; font-weight: 600; text-decoration: none; }
 .dev-warning { padding: 12px 16px; border: 1px solid #fcd34d; background: #fffbeb; color: #92400e; border-radius: 8px; }
 .dev-url { overflow-wrap: anywhere; }
+.dev-preview-action { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 14px 0; }
 .dev-link-list { padding: 0; list-style: none; }
 .dev-link-list li { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; padding: 12px 0; font-size: 13px; border-bottom: 1px solid #e2e8f0; }
 .dev-review-landing { max-width: 720px; margin: 50px auto; }

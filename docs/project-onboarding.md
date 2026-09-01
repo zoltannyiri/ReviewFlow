@@ -15,6 +15,9 @@
    Az ügyfél a tényleges weboldalon kommentel, nem annak képén vagy másolatán.
 8. Frissítsd a kapcsolat állapotát a fejlesztői oldalon. Sikeres SDK-bejelentkezés
    esetén látszik az időpont és az origin. A kommentek a **Lista frissítése** gombbal tölthetők be.
+9. A **Megnyitás review módban** gomb hitelesített fejlesztőként új, egy óráig
+   érvényes előnézeti linket készít és új lapon megnyitja a review kör céloldalát.
+   Nem próbálja visszaállítani egy korábbi ügyféllink nyers tokenjét.
 
 ### Vercel és localhost ugyanabban a projektben
 
@@ -61,8 +64,10 @@ Külső ügyfél számára mindkét ReviewFlow szolgáltatás legyen elérhető:
 | Frontend hosting | Az `/r/*` és `/developer` címeket a SPA belépőpontjára kell irányítania. |
 
 Külső cél-URL és helyi konfiguráció esetén figyelmeztetés jelenik meg. A localhost
-az ügyfél saját gépére mutat, nem a fejlesztő szerverére. Ebben a mérföldkőben nem
-történt publikus deployment, Vercel-fiókcsatlakoztatás vagy tárhelymódosítás.
+az ügyfél saját gépére mutat, nem a fejlesztő szerverére. A jelenlegi publikus
+frontend `https://reviewflow.zoltannyiri.hu`, az API és az SDK originje pedig
+`https://api.reviewflow.zoltannyiri.hu`. A kód élesítése továbbra is a meglévő
+CI/CD-folyamaton keresztül történik.
 
 ## Biztonsági határok
 
@@ -88,6 +93,11 @@ történt publikus deployment, Vercel-fiókcsatlakoztatás vagy tárhelymódosí
 - Régi, kulcs nélkül inicializált SDK továbbra is működhet, de nem küld kapcsolatjelzést.
 - A teljes link nem kerül tartós frontend tárolóba. Az API-válaszok `no-store`
   fejlécet kapnak. A vendéglinket kezeld hozzáférési titokként.
+- Az aktív vendégtoken csak az adott böngészőlap `sessionStorage` tárába kerül.
+  Ez teljes lapbetöltésen át megőrzi, de új lapnak és más originnek nem adja át.
+  Azonos originen futó XSS hozzáférhet, ezért a céloldal XSS-védelme és CSP-je fontos.
+- A fejlesztői előnézet új, egyórás linket készít a meglévő hash-only tárolással;
+  hitelesítés és szervezeti jogosultság nélkül nem használható.
 
 ## Migráció és tesztek
 
@@ -108,7 +118,7 @@ npm --prefix web run build
 npm --prefix packages/client run test:browser
 ```
 
-Az SDK tesztoldalán (`http://127.0.0.1:5174/tests/browser.html`) 31 sikeres teszt
+Az SDK tesztoldalán (`http://127.0.0.1:5174/tests/browser.html`) 40 sikeres teszt
 az elvárt. A `/tests/developer.html` mock API-val projektfelvételt, linkgenerálást,
 visszavonást, több origin kezelését, új review kör létrehozását és kapcsolható
 mentési hibát is támogat.
@@ -134,7 +144,10 @@ kliens párhuzamos tesztkérései pg deprecation warningot adhatnak; ez nem tesz
 
 ## Következő feladatok
 
-Publikus HTTPS-környezet és saját Vercel-projekt kipróbálása még szükséges.
-SPA-útvonalváltás és session-megőrzés, értesítés, rate limit és a régi
-kommentpayload teljes validációja nem készült el itt. Az SDK a megnyitott oldalon
-működik, de még nem ígér automatikus session-továbbvitelt minden belső navigációhoz.
+A többoldalas session és az SPA-útvonalváltás elkészült. A következő ellenőrzés a
+publikus ReviewFlow környezetben a `turazzvelunk.vercel.app` több valódi React
+útvonala közötti kézi próba. Értesítés, nyilvános API rate limit és a régi
+kommentpayload teljes validációja továbbra is külön feladat.
+
+A session-, navigációs és előnézeti működés részleteit, valamint az éles kézi
+tesztet a `docs/multi-page-review.md` írja le.

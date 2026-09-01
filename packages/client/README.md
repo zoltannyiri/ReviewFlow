@@ -2,9 +2,13 @@
 
 ## Csoportosított pinek és kommentpanel
 
-Az SDK továbbra is csak `rf_session` URL-paraméter esetén indul el. A nyilvános
-komment API mellett a kommentenkénti válasz API-t is használja. A válaszokhoz
-a `20260831150000_add_comment_replies` backend-migráció szükséges.
+Az SDK az URL-ben kapott `rf_session` tokent sikeres ellenőrzés után az aktuális
+böngészőlap `sessionStorage` tárába menti. Teljes lapbetöltés után innen állítja
+vissza a review sessiont; érvénytelen, lejárt vagy visszavont tokent eltávolít.
+Az URL-paramétert validálás után úgy veszi ki a címsorból, hogy a többi query
+paraméter és a hash megmarad. A nyilvános komment API mellett a kommentenkénti
+válasz API-t is használja. A válaszokhoz a `20260831150000_add_comment_replies`
+backend-migráció szükséges.
 
 A jelenlegi útvonal kommentjeit az alábbi sorrendben csoportosítja:
 
@@ -29,16 +33,25 @@ a megoldottakat is. A panel sorrendje a backend létrehozási sorrendjét követ
   vendég válaszmező, inline hiba és ismételt beküldés elleni védelem. A panel
   frissítése és bezárása megőrzi a még el nem küldött szöveget.
 - `src/api.js`: a válaszokat a `POST /review/:token/comments/:id/replies`
-  végpontra küldi. Válaszadáskor a pin számlálója és a komment státusza nem változik.
+  végpontra küldi, és státuszkóddal ellátott hibát ad a session-validáláshoz.
+  Válaszadáskor a pin számlálója és a komment státusza nem változik.
+- `src/reviewSession.js` (új): URL-token prioritás, projektenként névterezett
+  `sessionStorage`, tokeneltávolítás és érvénytelenségi státuszok.
+- `src/navigation.js` (új): `pushState`, `replaceState` és `popstate` figyelése;
+  kizárólag pathname-változáskor jelez, leállításkor visszaállítja a history API-t.
+- `src/toolbar.js` (új): egyértelmű **Böngészés** és **Kommentelés** mód. Alapból
+  böngészési módban indul, ezért a céloldal linkjei, gombjai és űrlapjai működnek.
 - `src/uiRoot.js` (új): közös Shadow DOM a toolbar, pinek, panel és kommentbevitel
   CSS-izolációjához. A befogadó elem és az interaktív felületek
   `data-reviewflow-ui` jelölést kapnak. A meglévő kijelölő kiemelése kívül marad.
-- `src/index.js`: összekötés, útvonalszűrés, betöltési versenyhelyzetek kezelése,
-  sikeres mentés utáni azonnali pinfrissítés. Nem naplózza a vendégtokent.
+- `src/index.js`: session-helyreállítás, összekötés, SPA útvonalváltás,
+  útvonalszűrés, betöltési versenyhelyzetek kezelése és sikeres mentés utáni
+  azonnali pinfrissítés. Mindig az aktuális `location.pathname` értékét használja,
+  és nem naplózza a vendégtokent.
 - `src/commentBox.js`: az `alert()` helyett helyi hibaüzenet; sikertelen mentésnél
   megmaradó vázlat, mentés alatt dupla beküldés tiltása, eseménykezelők takarítása.
-- `src/elementPicker.js`: a kattintás teljes `composedPath()` útvonalán figyelmen
-  kívül hagyja az SDK UI-ját, Shadow DOM mellett is.
+- `src/elementPicker.js`: csak kommentelési módban aktív; a kattintás teljes
+  `composedPath()` útvonalán figyelmen kívül hagyja az SDK UI-ját, Shadow DOM mellett is.
 - `package.json`, `tests/`: függőség hozzáadása nélküli tesztparancsok és tesztoldal.
 
 A pozíciófrissítés `requestAnimationFrame`-mel összevont. A scroll esemény
@@ -61,8 +74,9 @@ npm --prefix web run lint
 node web/node_modules/eslint/bin/eslint.js --no-config-lookup --config web/eslint.config.js packages/client/src packages/client/tests
 ```
 
-A 13 Node-teszt az azonosító-prioritást, az útvonalszétválasztást, a geometriai
-fallbacket, a kulcsütközéseket, az adatmegőrzést és a cél-URL képzését ellenőrzi.
+A 17 Node-teszt az azonosító-prioritást, az útvonalszétválasztást, a geometriai
+fallbacket, a kulcsütközéseket, a cél-URL képzését, a session életciklusát és a
+history API tiszta visszaállítását ellenőrzi.
 
 Az önellenőrző böngészőteszt a már telepített webes Vite-ot használja:
 
@@ -71,7 +85,7 @@ npm --prefix packages/client run test:browser
 ```
 
 Nyisd meg: <http://127.0.0.1:5174/tests/browser.html>.
-Az oldal alján az elvárt eredmény: **31 sikeres, 0 sikertelen teszt.**
+Az oldal alján az elvárt eredmény: **40 sikeres, 0 sikertelen teszt.**
 A tesztek után a főcímhez 3, a CTA-hoz 1, a koordinátás célponthoz 2 komment
 marad a kézi próbához. Az oldalon szándékosan agresszív gomb- és textarea-CSS
 teszteli az elkülönítést. Mentési/betöltési hibák, DOM-csere és újrainicializálás
@@ -96,7 +110,8 @@ Nem helyettesíti a következő, valódi adatbázissal végzett próbát.
    a pin kövesse a célpontot. Próbáld keskeny nézetben is a panel bezárását.
 8. Tesztkörnyezetben szimulálj sikertelen POST-ot: ne legyen böngésző-alert,
    a vázlat maradjon meg, és újrapróbálással menthető legyen.
-9. `rf_session` nélküli oldalon ne jelenjen meg ReviewFlow UI.
+9. Érvényes `sessionStorage` token nélkül, `rf_session` nélküli oldalon ne
+   jelenjen meg ReviewFlow UI. Érvényes, ugyanabban a lapban mentett sessionnel igen.
 10. Írj választ a fejlesztői oldalon, frissítsd a vendégoldalt, és nyisd meg a
     pint. A fejlesztő válasza, neve, szerepe és időpontja jelenjen meg.
 11. Válaszolj vendégként a panelből, majd a fejlesztői oldalon kattints a
@@ -110,8 +125,9 @@ Nem helyettesíti a következő, valódi adatbázissal végzett próbát.
   eltérő görgetésnél/layoutnál/viewportnál ugyanaz az elem külön csoportba kerülhet,
   és az ilyen pin nem tud megbízhatóan az elem után mozogni. Stabil rögzítéshez
   jelenleg `data-review-id` vagy HTML `id` szükséges; új selector/adatmodell nem készült.
-- SPA-session megőrzés, útvonalváltás automatikus észlelése, vendégoldali
-  státuszmódosítás és élő válaszfrissítés továbbra is későbbi mérföldkövek.
+- Vendégoldali státuszmódosítás és élő válaszfrissítés továbbra is későbbi mérföldkő.
+- A `sessionStorage`-ban lévő bearer tokenhez az azonos originen futó JavaScript
+  hozzáférhet, ezért a céloldal XSS-védelme és CSP-je továbbra is biztonsági határ.
 - A cél-URL query/hash kezelése, a nyers token naplózása és az ismételt
   deaktiválás hash-visszaadása már javítva.
 - `backend/src/controllers/commentController.js`: nincs explicit szövegtípus- és
