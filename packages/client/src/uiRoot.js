@@ -30,6 +30,57 @@ export const createUiRoot = () => {
     }
     [data-reviewflow-ui] { pointer-events: auto; }
     .rf-comment-pin:hover { filter: brightness(1.08); box-shadow: 0 5px 16px rgba(37, 99, 235, .48) !important; }
+    
+    @keyframes rf-pin-pulse {
+      0% { transform: translate(-50%, -50%) scale(1); box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.8); }
+      50% { transform: translate(-50%, -50%) scale(1.3); box-shadow: 0 0 0 16px rgba(37, 99, 235, 0); }
+      100% { transform: translate(-50%, -50%) scale(1); box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); }
+    }
+    .rf-pulse-pin {
+      animation: rf-pin-pulse 1s ease 3 !important;
+    }
+
+    @keyframes rf-focus-pulse {
+      0% { box-shadow: 0 0 0 2px #2563eb, 0 0 12px rgba(37, 99, 235, 0.4); opacity: 0.85; }
+      100% { box-shadow: 0 0 0 5px #1d4ed8, 0 0 32px rgba(37, 99, 235, 0.95); opacity: 1; }
+    }
+    .rf-focus-highlight {
+      position: fixed;
+      pointer-events: none;
+      z-index: 2147483645;
+      border: 3px solid #2563eb;
+      border-radius: 6px;
+      animation: rf-focus-pulse 0.8s ease-in-out infinite alternate;
+      background: rgba(37, 99, 235, 0.08);
+      transition: opacity 0.4s ease;
+    }
+
+    .rf-toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(0);
+      background: #0f172a;
+      color: #f8fafc;
+      padding: 10px 20px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 600;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+      border: 1px solid #334155;
+      z-index: 2147483647;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      opacity: 1;
+      transition: opacity 0.3s ease, transform 0.3s ease;
+      pointer-events: auto;
+    }
+    .rf-toast.rf-toast-hiding {
+      opacity: 0;
+      transform: translateX(-50%) translateY(10px);
+    }
+
     .rf-thread { margin-top: 16px; padding-top: 12px; border-top: 1px dashed #cbd5e1; }
     .rf-thread h3 { margin: 0 0 10px; font-size: 12px; color: #475569; }
     .rf-thread ol { list-style: none; margin: 0; padding: 0; }
@@ -47,9 +98,37 @@ export const createUiRoot = () => {
   root.appendChild(style);
   document.body.appendChild(host);
 
+  let toastTimeout = null;
+  let activeToast = null;
+
+  const showToast = (message, duration = 3000) => {
+    if (activeToast) {
+      clearTimeout(toastTimeout);
+      activeToast.remove();
+      activeToast = null;
+    }
+    const toast = document.createElement('div');
+    toast.className = 'rf-toast';
+    toast.setAttribute('role', 'status');
+    toast.setAttribute('data-reviewflow-ui', 'true');
+    toast.textContent = `✓ ${message}`;
+    root.appendChild(toast);
+    activeToast = toast;
+
+    toastTimeout = setTimeout(() => {
+      toast.classList.add('rf-toast-hiding');
+      setTimeout(() => {
+        if (activeToast === toast) activeToast = null;
+        toast.remove();
+      }, 300);
+    }, duration);
+  };
+
   return {
     root,
+    showToast,
     destroy() {
+      clearTimeout(toastTimeout);
       host.remove();
     },
   };

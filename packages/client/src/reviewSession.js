@@ -1,4 +1,5 @@
 const SESSION_PARAMETER = 'rf_session';
+const FOCUS_PARAMETER = 'rf_focus';
 
 export const getReviewSessionStorageKey = ({ apiUrl, projectKey, baseUrl = window.location.href }) => {
   const origin = new URL(apiUrl, baseUrl).origin;
@@ -30,6 +31,17 @@ export const removeReviewSessionFromUrl = ({ history = window.history, location 
   const url = new URL(location.href);
   if (!url.searchParams.has(SESSION_PARAMETER)) return;
   url.searchParams.delete(SESSION_PARAMETER);
+  history.replaceState(history.state, '', url.href);
+};
+
+export const readReviewFocus = ({ location = window.location } = {}) => {
+  return new URL(location.href).searchParams.get(FOCUS_PARAMETER);
+};
+
+export const removeReviewFocusFromUrl = ({ history = window.history, location = window.location } = {}) => {
+  const url = new URL(location.href);
+  if (!url.searchParams.has(FOCUS_PARAMETER)) return;
+  url.searchParams.delete(FOCUS_PARAMETER);
   history.replaceState(history.state, '', url.href);
 };
 

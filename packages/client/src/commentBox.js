@@ -4,12 +4,23 @@ export const createCommentBox = ({
   root,
   onSubmit,
 }) => {
-  const container = document.createElement('div');
+  const selectionHighlight = document.createElement('div');
+  selectionHighlight.setAttribute(REVIEWFLOW_ATTRIBUTE, 'true');
+  Object.assign(selectionHighlight.style, {
+    position: 'fixed',
+    pointerEvents: 'none',
+    zIndex: '2147483645',
+    border: '2px solid #2563eb',
+    background: 'rgba(37, 99, 235, 0.15)',
+    display: 'none',
+    borderRadius: '4px',
+    boxShadow: '0 0 12px rgba(37, 99, 235, 0.45)',
+    transition: 'all 0.15s ease',
+  });
+  root.appendChild(selectionHighlight);
 
-  container.setAttribute(
-    REVIEWFLOW_ATTRIBUTE,
-    'true'
-  );
+  const container = document.createElement('div');
+  container.setAttribute(REVIEWFLOW_ATTRIBUTE, 'true');
 
   Object.assign(container.style, {
     position: 'fixed',
@@ -23,22 +34,21 @@ export const createCommentBox = ({
     color: '#ffffff',
     padding: '14px',
     borderRadius: '12px',
-    boxShadow: '0 12px 40px rgba(0, 0, 0, 0.3)',
+    boxShadow: '0 12px 40px rgba(0, 0, 0, 0.35)',
     fontFamily: 'Arial, sans-serif',
   });
 
   const title = document.createElement('div');
-
-  title.innerText = 'Megjegyzés';
+  title.innerText = 'Megjegyzés hozzáadása';
 
   Object.assign(title.style, {
     fontSize: '14px',
     fontWeight: '600',
     marginBottom: '10px',
+    color: '#f9fafb',
   });
 
   const textarea = document.createElement('textarea');
-
   textarea.placeholder = 'Írd le, min változtatnál...';
   textarea.setAttribute('aria-label', 'Megjegyzés szövege');
 
@@ -62,7 +72,10 @@ export const createCommentBox = ({
   const errorMessage = document.createElement('div');
   errorMessage.setAttribute('role', 'alert');
   Object.assign(errorMessage.style, {
-    color: '#fca5a5', fontSize: '13px', marginTop: '8px',
+    color: '#fca5a5',
+    fontSize: '13px',
+    marginTop: '8px',
+    lineHeight: '1.4',
   });
 
   Object.assign(actions.style, {
@@ -73,7 +86,6 @@ export const createCommentBox = ({
   });
 
   const cancelButton = document.createElement('button');
-
   cancelButton.type = 'button';
   cancelButton.innerText = 'Mégse';
 
@@ -82,11 +94,12 @@ export const createCommentBox = ({
     background: 'transparent',
     color: '#d1d5db',
     cursor: 'pointer',
-    padding: '8px 10px',
+    padding: '8px 12px',
+    borderRadius: '6px',
+    fontWeight: '500',
   });
 
   const saveButton = document.createElement('button');
-
   saveButton.type = 'button';
   saveButton.innerText = 'Mentés';
 
@@ -95,7 +108,7 @@ export const createCommentBox = ({
     background: '#2563eb',
     color: '#ffffff',
     cursor: 'pointer',
-    padding: '8px 12px',
+    padding: '8px 14px',
     borderRadius: '7px',
     fontWeight: '600',
   });
@@ -118,6 +131,7 @@ export const createCommentBox = ({
   const close = () => {
     if (submitting) return;
     container.style.display = 'none';
+    selectionHighlight.style.display = 'none';
     textarea.value = '';
     errorMessage.textContent = '';
     selectedElement = null;
@@ -130,25 +144,21 @@ export const createCommentBox = ({
     textarea.value = '';
     errorMessage.textContent = '';
 
+    // Position target element highlight
+    selectionHighlight.style.display = 'block';
+    selectionHighlight.style.left = `${selection.elementRect.x}px`;
+    selectionHighlight.style.top = `${selection.elementRect.y}px`;
+    selectionHighlight.style.width = `${selection.elementRect.width}px`;
+    selectionHighlight.style.height = `${selection.elementRect.height}px`;
+
     const popupWidth = 320;
     const margin = 12;
 
-    let left =
-      selection.elementRect.x +
-      selection.elementRect.width +
-      margin;
+    let left = selection.elementRect.x + selection.elementRect.width + margin;
+    let top = selection.elementRect.y;
 
-    let top =
-      selection.elementRect.y;
-
-    if (
-      left + popupWidth >
-      window.innerWidth - margin
-    ) {
-      left =
-        selection.elementRect.x -
-        popupWidth -
-        margin;
+    if (left + popupWidth > window.innerWidth - margin) {
+      left = selection.elementRect.x - popupWidth - margin;
     }
 
     if (left < margin) {
@@ -174,60 +184,57 @@ export const createCommentBox = ({
     }, 0);
   };
 
-  cancelButton.addEventListener(
-    'click',
-    close
-  );
+  cancelButton.addEventListener('click', close);
 
-  saveButton.addEventListener(
-    'click',
-    async () => {
-      const comment = textarea.value.trim();
+  saveButton.addEventListener('click', async () => {
+    const comment = textarea.value.trim();
 
-      if (!comment || !selectedElement || submitting) {
-        return;
+    if (!comment || !selectedElement || submitting) {
+      return;
+    }
+
+    submitting = true;
+    saveButton.disabled = true;
+    cancelButton.disabled = true;
+    textarea.disabled = true;
+    saveButton.textContent = 'Mentés…';
+    errorMessage.textContent = '';
+
+    let saved = false;
+    try {
+      await onSubmit({ element: selectedElement, comment });
+      saved = true;
+    } catch {
+      if (!destroyed) {
+        errorMessage.textContent = 'A megjegyzést nem sikerült menteni. Próbáld újra.';
       }
-
-      submitting = true;
-      saveButton.disabled = true;
-      cancelButton.disabled = true;
-      textarea.disabled = true;
-      saveButton.textContent = 'Mentés...';
-      errorMessage.textContent = '';
-
-      let saved = false;
-      try {
-        await onSubmit({ element: selectedElement, comment });
-        saved = true;
-      } catch {
-        if (!destroyed) {
-          errorMessage.textContent = 'A megjegyzést nem sikerült menteni. Próbáld újra.';
-        }
-      } finally {
-        submitting = false;
-        saveButton.disabled = false;
-        cancelButton.disabled = false;
-        textarea.disabled = false;
-        saveButton.textContent = 'Mentés';
-        if (!destroyed && saved) close();
-        else if (!destroyed) textarea.focus();
+    } finally {
+      submitting = false;
+      saveButton.disabled = false;
+      cancelButton.disabled = false;
+      textarea.disabled = false;
+      saveButton.textContent = 'Mentés';
+      if (!destroyed && saved) {
+        close();
+      } else if (!destroyed) {
+        textarea.focus();
       }
     }
-  );
+  });
 
   const handleKeyDown = (event) => {
-    if (event.key === 'Escape') close();
+    if (event.key === 'Escape' && !submitting) close();
   };
   document.addEventListener('keydown', handleKeyDown);
 
   return {
     open,
     close,
-
     destroy() {
       destroyed = true;
       clearTimeout(focusTimer);
       document.removeEventListener('keydown', handleKeyDown);
+      selectionHighlight.remove();
       container.remove();
     },
   };

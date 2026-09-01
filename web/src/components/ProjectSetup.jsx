@@ -23,7 +23,7 @@ export default function ProjectSetup({ client, project, round, onSessionExpired 
   const previewAction = useDeveloperAction(onSessionExpired);
   const [issued, setIssued] = useState(null);
   const [previewHref, setPreviewHref] = useState('');
-  const [days, setDays] = useState('7');
+  const [days, setDays] = useState('0');
   const apiUrl = new URL(api.defaults.baseURL || '/api', window.location.origin);
   const moduleUrl = new URL('/sdk/index.js', apiUrl.origin).href;
   const safeJson = (value) => JSON.stringify(value).replaceAll('<', '\\u003c');
@@ -73,7 +73,9 @@ export default function ProjectSetup({ client, project, round, onSessionExpired 
       <h3>2. Ügyféllink létrehozása</h3>
       <p className="dev-small">A link birtokosa fiók nélkül hozzáfér a kör visszajelzéseihez. Csak annak küldd el, akinek ezt engedélyezed.</p>
       <label>Link érvényessége<select value={days} onChange={(event) => setDays(event.target.value)} disabled={action.busy}>
-        <option value="7">7 nap</option><option value="30">30 nap</option><option value="0">Visszavonásig</option>
+        <option value="0">Visszavonásig (nincs lejárat)</option>
+        <option value="7">7 nap</option>
+        <option value="30">30 nap</option>
       </select></label>
       <button className="dev-primary" disabled={action.busy || links.loading || Boolean(links.error)} onClick={() => action.run(
         (signal) => client.post('/rounds/' + round.id + '/links', {
@@ -96,7 +98,7 @@ export default function ProjectSetup({ client, project, round, onSessionExpired 
         const expired = link.expiresAt && new Date(link.expiresAt) <= new Date();
         return <li key={link.id}>
           <span>{!link.isActive ? 'Visszavont' : expired ? 'Lejárt' : 'Aktív'} · {new Date(link.createdAt).toLocaleString('hu-HU')}
-            {link.expiresAt && ' · Lejár: ' + new Date(link.expiresAt).toLocaleString('hu-HU')}</span>
+            {link.expiresAt ? ' · Lejár: ' + new Date(link.expiresAt).toLocaleString('hu-HU') : ' · Nincs lejárat'}</span>
           {link.isActive && <button disabled={action.busy || links.loading} onClick={() => action.run(
             (signal) => client.remove('/links/' + link.id, { signal }), ({ reviewLink }) => {
               links.setData((current) => ({ ...current, reviewLinks: current.reviewLinks.map((item) => item.id === link.id ? reviewLink : item) }));

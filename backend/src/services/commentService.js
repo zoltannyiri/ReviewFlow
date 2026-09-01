@@ -32,13 +32,22 @@ export const resolveComment = async ({ userId, commentId }) => {
   try {
     // Keep authorization in the UPDATE itself, not only in a preceding read.
     // All organization members may resolve; guest tokens cannot reach this call.
-    return await prisma.comment.update({
-      where: {
-        id: commentId,
-        reviewRound: { project: projectMembership(userId) },
-      },
-      data: { status: 'RESOLVED' },
-      include: { replies: replyListSelection },
+    return await prisma.$transaction(async (tx) => {
+      const updatedComment = await tx.comment.update({
+        where: {
+          id: commentId,
+          reviewRound: { project: projectMembership(userId) },
+        },
+        data: { status: 'RESOLVED' },
+        include: { replies: replyListSelection },
+      });
+
+      await tx.task.updateMany({
+        where: { commentId: updatedComment.id },
+        data: { status: 'DONE' },
+      });
+
+      return updatedComment;
     });
   } catch (error) {
     if (error.code === 'P2025') throw new Error('COMMENT_NOT_FOUND');
@@ -60,28 +69,43 @@ export const createPublicComment = async ({
 }) => {
   const review = await getPublicReviewByToken(token);
 
-  return prisma.comment.create({
-    data: {
-      reviewRoundId: review.reviewRound.id,
-      reviewLinkId: review.link.id,
+  return prisma.$transaction(async (tx) => {
+    const createdComment = await tx.comment.create({
+      data: {
+        reviewRoundId: review.reviewRound.id,
+        reviewLinkId: review.link.id,
 
-      comment: comment.trim(),
+        comment: comment.trim(),
 
-      pathname,
-      tagName,
+        pathname,
+        tagName,
 
-      reviewElementId: reviewElementId || null,
-      elementId: elementId || null,
-      elementText: elementText || null,
+        reviewElementId: reviewElementId || null,
+        elementId: elementId || null,
+        elementText: elementText || null,
 
-      viewportWidth,
-      viewportHeight,
+        viewportWidth,
+        viewportHeight,
 
-      elementX: elementRect.x,
-      elementY: elementRect.y,
-      elementWidth: elementRect.width,
-      elementHeight: elementRect.height,
-    },
+        elementX: elementRect.x,
+        elementY: elementRect.y,
+        elementWidth: elementRect.width,
+        elementHeight: elementRect.height,
+      },
+    });
+
+    await tx.task.create({
+      data: {
+        projectId: review.project.id,
+        reviewRoundId: review.reviewRound.id,
+        commentId: createdComment.id,
+        title: comment.trim(),
+        status: 'TODO',
+        position: 0,
+      },
+    });
+
+    return createdComment;
   });
 };
 

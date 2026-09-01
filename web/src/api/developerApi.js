@@ -27,5 +27,14 @@ export const createDeveloperApi = (accessToken) => {
         message,
       }, { headers, signal });
     },
+    getTasks(roundId, { signal } = {}) {
+      return api.get(`/rounds/${encodeURIComponent(roundId)}/tasks`, { headers, signal });
+    },
+    updateTask(taskId, data, { signal } = {}) {
+      return api.patch(`/tasks/${encodeURIComponent(taskId)}`, data, { headers, signal });
+    },
+    createPreview(roundId, { signal } = {}) {
+      return api.post(`/rounds/${encodeURIComponent(roundId)}/preview`, {}, { headers, signal });
+    },
   };
 };

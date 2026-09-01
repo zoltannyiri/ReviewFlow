@@ -50,6 +50,14 @@ const findElementByContent = (comment) => {
   return candidates[0]?.element || null;
 };
 
+export const findTargetElementForComment = (comment) => {
+  const stable = findStableElement(comment);
+  if (isVisible(stable)) return stable;
+  const contentMatch = findElementByContent(comment);
+  if (contentMatch) return contentMatch;
+  return null;
+};
+
 const findElement = (group, currentTarget) => {
   if (isVisible(currentTarget)) return currentTarget;
 
@@ -187,6 +195,20 @@ export const createCommentPins = ({ root, onSelect }) => {
         entry.pin.setAttribute('aria-label', label);
       });
       schedulePositions();
+    },
+    pulse(key) {
+      const entry = pins.get(key);
+      if (entry?.pin) {
+        entry.pin.classList.remove('rf-pulse-pin');
+        void entry.pin.offsetWidth;
+        entry.pin.classList.add('rf-pulse-pin');
+        setTimeout(() => {
+          entry.pin.classList.remove('rf-pulse-pin');
+        }, 3500);
+      }
+    },
+    getPin(key) {
+      return pins.get(key)?.pin || null;
     },
     clear,
     destroy() {

@@ -5,6 +5,7 @@ import projectRoutes from './routes/projectRoutes.js';
 import reviewRoundRoutes from './routes/reviewRoundRoutes.js';
 import reviewLinkRoutes from './routes/reviewLinkRoutes.js';
 import commentRoutes from './routes/commentRoutes.js';
+import taskRoutes from './routes/taskRoutes.js';
 import { fileURLToPath } from 'node:url';
 import { reviewOrigin } from './middleware/reviewOrigin.js';
 import { frontendOrigin } from './utils/projectUrl.js';
@@ -31,6 +32,7 @@ app.use('/api/projects', projectRoutes);
 app.use('/api', reviewRoundRoutes);
 app.use('/api', reviewLinkRoutes);
 app.use('/api', commentRoutes);
+app.use('/api', taskRoutes);
 app.get('/api/health', (req, res) => {
   res.status(200).json({ success: true, message: 'ReviewFlow API is running' });
 });
