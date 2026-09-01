@@ -1,0 +1,132 @@
+name: Deploy ReviewFlow Backend
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "backend/**"
+      - "packages/client/**"
+      - ".github/workflows/deploy-backend.yml"
+
+  workflow_dispatch:
+
+concurrency:
+  group: reviewflow-production
+  cancel-in-progress: false
+
+jobs:
+  test:
+    name: Test backend
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: backend
+
+    env:
+      DATABASE_URL: postgresql://user:password@localhost:5432/reviewflow
+      JWT_SECRET: ci-test-secret
+      FRONTEND_URL: http://localhost:5173
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Run tests
+        run: npm test
+
+  deploy:
+    name: Deploy to VPS
+    needs: test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Configure SSH
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+
+          chmod 600 ~/.ssh/id_ed25519
+
+          ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts
+
+      - name: Deploy
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+        run: |
+          ssh \
+            -i ~/.ssh/id_ed25519 \
+            "$VPS_USER@$VPS_HOST" \
+            'bash -se' <<'EOF'
+
+          set -euo pipefail
+
+          echo "=== Loading Node 22 ==="
+
+          export NVM_DIR="/root/.nvm"
+          . "$NVM_DIR/nvm.sh"
+
+          nvm use 22 >/dev/null
+
+          echo "Node: $(node -v)"
+          echo "NPM: $(npm -v)"
+
+          echo "=== Updating ReviewFlow ==="
+
+          cd /root/ReviewFlow
+
+          git fetch origin main
+          git reset --hard origin/main
+
+          echo "=== Installing backend dependencies ==="
+
+          cd /root/ReviewFlow/backend
+
+          npm ci
+
+          echo "=== Generating Prisma Client ==="
+
+          npx prisma generate
+
+          echo "=== Applying database migrations ==="
+
+          npx prisma migrate deploy
+
+          echo "=== Restarting ReviewFlow ==="
+
+          pm2 restart reviewflow-backend --update-env
+          pm2 save
+
+          echo "=== Health check ==="
+
+          sleep 2
+
+          curl \
+            --fail \
+            --silent \
+            --show-error \
+            http://127.0.0.1:5001/api/health
+
+          echo
+          echo "ReviewFlow deployment successful"
+
+          EOF
